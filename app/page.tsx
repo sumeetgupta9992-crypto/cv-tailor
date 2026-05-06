@@ -1,65 +1,1140 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle } from 'lucide-react';
+
+const PRICE_INR = 99;
+const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
+const SESSION_STORAGE_KEY = 'cv-tailor-session';
+const SESSION_EXPIRY_HOURS = 24;
+
+type CVData = {
+  name: string;
+  tagline?: string;
+  contact?: {
+    email?: string;
+    phone?: string;
+    location?: string;
+    linkedin?: string;
+  };
+  summary: string;
+  skills: string[];
+  experience: Array<{ title: string; company: string; duration: string; bullets: string[] }>;
+  education: Array<{ degree: string; institution: string; year: string }>;
+};
+
+type AppMode = 'mode-selection' | 'existing-cv' | 'interview' | 'analyzing' | 'analysis' | 'payment' | 'generating' | 'success' | 'error';
+type AnalysisQuestion = { question: string; options: string[] | null };
+type JDRequirement = { requirement: string; match_status: 'strong_match' | 'partial_match' | 'not_found' };
+
+type SessionData = {
+  paid: boolean;
+  cvContent: string;
+  jobDescription: string;
+  additionalInfo: string;
+  interviewAnswers: string[];
+  cvJson: CVData | null;
+  refinementCount: number;
+  refinementChanges: string[];
+  expiryTime: number;
+  pendingCvContent: string;
+};
+
+const INTERVIEW_QUESTIONS = [
+  { question: 'What\'s your full name?', required: true },
+  { question: 'What\'s your email address?', required: false },
+  { question: 'What\'s your phone number?', required: false },
+  { question: 'What is your highest education? (e.g., B.Tech Computer Science, IIT Delhi, 2024)', required: true },
+  { question: 'Class XII — School name, board, percentage/CGPA', required: false },
+  { question: 'Class X — School name, board, percentage/CGPA', required: false },
+  { question: 'Do you have any internship or work experience? If yes, describe your most recent one: company name, role, duration, and what you did.', required: false },
+  { question: 'List your technical skills (programming languages, tools, frameworks)', required: false },
+  { question: 'Any projects you\'ve worked on? Describe one with what you built and the outcome.', required: false },
+  { question: 'Any certifications, competitions, awards, or leadership roles?', required: false },
+  { question: 'Any volunteering experience with tangible impact?', required: false },
+  { question: 'What kind of roles are you targeting? (e.g., Software Engineer, Product Manager, Data Analyst)', required: false },
+];
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const [appMode, setAppMode] = useState<AppMode>('mode-selection');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [cvFiles, setCvFiles] = useState<File[]>([]);
+  const [additionalInfo, setAdditionalInfo] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [interviewIndex, setInterviewIndex] = useState(0);
+  const [interviewAnswers, setInterviewAnswers] = useState<string[]>(Array(INTERVIEW_QUESTIONS.length).fill(''));
+  const [currentAnswer, setCurrentAnswer] = useState('');
+  const [cvJson, setCvJson] = useState<CVData | null>(null);
+  const [refinementCount, setRefinementCount] = useState(0);
+  const [refinementFeedback, setRefinementFeedback] = useState('');
+  const [refinementChanges, setRefinementChanges] = useState<string[]>([]);
+  const [isPaid, setIsPaid] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
+  const [pendingCvContent, setPendingCvContent] = useState('');
+  const [pendingMode, setPendingMode] = useState<'existing' | 'scratch' | null>(null);
+  const [jdRequirements, setJdRequirements] = useState<JDRequirement[]>([]);
+  const [analysisQuestions, setAnalysisQuestions] = useState<AnalysisQuestion[]>([]);
+  const [analysisAnswers, setAnalysisAnswers] = useState<string[]>([]);
+  const [currentAnalysisAnswer, setCurrentAnalysisAnswer] = useState('');
+  const [showHintsModal, setShowHintsModal] = useState(false);
+  const [openHintCategory, setOpenHintCategory] = useState<string | null>(null);
+  const [copiedHint, setCopiedHint] = useState<string | null>(null);
+  const [showTailorAnotherModal, setShowTailorAnotherModal] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const interviewEndRef = useRef<HTMLDivElement>(null);
+
+  const HINT_CATEGORIES = [
+    {
+      label: 'Academic Achievements (School)',
+      bullets: [
+        'Secured 95%+ in Class XII (CBSE), ranking in top 5% across 300+ students in science stream',
+        'Achieved 10 CGPA in Class X board exams; recognized for consistent academic excellence',
+        'Qualified for NTSE Stage 1, ranking among top performers across district-level examination',
+      ],
+    },
+    {
+      label: 'Academic Achievements (College)',
+      bullets: [
+        'Graduated with CGPA 8.5+/10, ranking among top 15% in batch of 300+ students',
+        'Secured A grade in core courses including Data Structures, Algorithms, and Operating Systems',
+        'Published research paper in college journal, demonstrating structured thinking',
+      ],
+    },
+    {
+      label: 'Extracurricular Activities',
+      bullets: [
+        'Led college fest event with 2000+ participants, managing operations and sponsorships',
+        'Won inter-college debate competition among 50+ teams',
+        'Organized cultural fest with ₹5L+ budget, coordinating logistics across 20+ vendors',
+      ],
+    },
+    {
+      label: 'Internship Experience',
+      bullets: [
+        'Analyzed user behavior data to identify trends, improving engagement metrics by 15%',
+        'Built dashboards using Excel/Power BI to track performance metrics',
+        'Developed automation script reducing manual effort by 10 hours/week',
+      ],
+    },
+    {
+      label: 'Tech Projects',
+      bullets: [
+        'Built full-stack web application using React and Node.js',
+        'Solved 300+ problems on coding platforms, strengthening DSA skills',
+        'Implemented ML model achieving 85% accuracy on classification problem',
+      ],
+    },
+    {
+      label: 'Volunteering',
+      bullets: [
+        'Taught mathematics to 30+ underprivileged students, improving scores by 20%',
+        'Organized donation drive raising ₹1L+ for NGO supporting education',
+      ],
+    },
+    {
+      label: 'Certifications',
+      bullets: [
+        'Completed certification in Data Analytics, covering SQL, Python, and visualization',
+        'Earned cloud certification demonstrating understanding of scalable infrastructure',
+      ],
+    },
+  ];
+
+  const copyHint = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedHint(text);
+    setTimeout(() => setCopiedHint(null), 1500);
+  };
+
+  // Load Razorpay script and restore session from localStorage
+  useEffect(() => {
+    // Load Razorpay script
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    // Restore session from localStorage (only on client side)
+    if (typeof window !== 'undefined') {
+      const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (savedSession) {
+        try {
+          const session: SessionData = JSON.parse(savedSession);
+          if (Date.now() < session.expiryTime && session.paid) {
+            // Session is valid
+            setIsPaid(true);
+            setAdditionalInfo(session.additionalInfo);
+            setJobDescription(session.jobDescription);
+            setInterviewAnswers(session.interviewAnswers);
+            setCvJson(session.cvJson);
+            setRefinementCount(session.refinementCount);
+            setRefinementChanges(session.refinementChanges);
+            setPendingCvContent(session.pendingCvContent || session.cvContent || '');
+            setAppMode('success');
+          } else {
+            // Session expired
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+        } catch (e) {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+      }
+    }
+  }, []);
+
+  const saveSessionToLocalStorage = (overrides?: Partial<SessionData>) => {
+    const session: SessionData = {
+      paid: true,
+      cvContent: pendingCvContent,
+      pendingCvContent,
+      jobDescription,
+      additionalInfo,
+      interviewAnswers,
+      cvJson,
+      refinementCount,
+      refinementChanges,
+      expiryTime: Date.now() + SESSION_EXPIRY_HOURS * 60 * 60 * 1000,
+      ...overrides,
+    };
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setIsPaid(false);
+    setCvFiles([]);
+    setAdditionalInfo('');
+    setJobDescription('');
+    setInterviewIndex(0);
+    setInterviewAnswers(Array(INTERVIEW_QUESTIONS.length).fill(''));
+    setCurrentAnswer('');
+    setCvJson(null);
+    setRefinementCount(0);
+    setRefinementFeedback('');
+    setRefinementChanges([]);
+    setJdRequirements([]);
+    setAnalysisQuestions([]);
+    setAnalysisAnswers([]);
+    setCurrentAnalysisAnswer('');
+    setAppMode('mode-selection');
+  };
+
+  const handlePayment = async () => {
+    if (SKIP_PAYMENT) {
+      setIsPaid(true);
+      await proceedAfterPayment();
+      return;
+    }
+
+    try {
+      // Create order
+      const orderRes = await fetch('/api/create-order', { method: 'POST' });
+      const orderData = await orderRes.json();
+
+      if (!orderData.success) {
+        setErrorMsg('Failed to create payment order');
+        return;
+      }
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+        order_id: orderData.orderId,
+        amount: PRICE_INR * 100,
+        currency: 'INR',
+        name: 'CV Tailor',
+        description: 'Generate your tailored CV',
+        handler: async (response: any) => {
+          try {
+            // Verify payment
+            const verifyRes = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              setIsPaid(true);
+              await proceedAfterPayment();
+            } else {
+              setErrorMsg('Payment verification failed');
+              setAppMode('error');
+            }
+          } catch (error) {
+            setErrorMsg('Payment verification error');
+            setAppMode('error');
+          }
+        },
+        prefill: {
+          name: 'User',
+          email: '',
+          contact: '',
+        },
+        theme: { color: '#2B579A' },
+        method: {
+          upi: true,
+          card: false,
+          netbanking: false,
+          wallet: false,
+          emi: false,
+        },
+      };
+
+      const razorpayWindow = (window as any).Razorpay;
+      if (razorpayWindow) {
+        const rzp = new razorpayWindow(options);
+        rzp.open();
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Payment error');
+      setAppMode('error');
+    }
+  };
+
+  // Called immediately after payment. Files are already parsed and stored in pendingCvContent
+  // from the analyze step. Analysis answers are already collected. Just generate.
+  const proceedAfterPayment = async () => {
+    const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
+    await generateCV(pendingCvContent, qa);
+  };
+
+  const generateCV = async (cvText: string, answers: Array<{ question: string; answer: string }>) => {
+    setAppMode('generating');
+    setCvJson(null);
+    setRefinementCount(0);
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cvText,
+          jobDescription: jobDescription.trim() || null,
+          additionalInfo: additionalInfo.trim() || null,
+          answers,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCvJson(data.cvData);
+        saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: 0, refinementChanges: [] });
+        setAppMode('success');
+      } else {
+        setErrorMsg(data.error || 'Error generating CV');
+        setAppMode('error');
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Error generating CV');
+      setAppMode('error');
+    }
+  };
+
+  const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const added = Array.from(e.target.files ?? []);
+    setCvFiles((prev) => [...prev, ...added].slice(0, 3));
+    e.target.value = '';
+  };
+
+  useEffect(() => {
+    interviewEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [interviewIndex]);
+
+  const removeFile = (index: number) => {
+    setCvFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const runAnalysis = async (cvText: string) => {
+    setPendingCvContent(cvText);
+    setAnalysisAnswers([]);
+    setCurrentAnalysisAnswer('');
+    setErrorMsg('');
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cvContent: cvText,
+          jobDescription: jobDescription.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setJdRequirements(data.jd_requirements ?? []);
+        setAnalysisQuestions(data.questions ?? []);
+        setAppMode('analysis');
+      } else {
+        setErrorMsg(data.error || 'Analysis failed');
+        setAppMode('error');
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Analysis error');
+      setAppMode('error');
+    }
+  };
+
+  const handleCheckMyFitFromExisting = async () => {
+    if (cvFiles.length === 0 && !additionalInfo.trim()) {
+      setErrorMsg('Please upload a file or add some information about yourself');
+      return;
+    }
+    setErrorMsg('');
+    setPendingMode('existing');
+    setAppMode('analyzing');
+
+    let cvContent = '';
+    if (cvFiles.length > 0) {
+      const parsed = await Promise.all(
+        cvFiles.map(async (file) => {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd });
+          const d = await res.json();
+          return d.success ? d.text : '';
+        })
+      );
+      cvContent = parsed.filter(Boolean).join('\n\n---\n\n');
+    }
+
+    const fullCvText = [cvContent, additionalInfo.trim()].filter(Boolean).join('\n\n');
+    await runAnalysis(fullCvText);
+  };
+
+  const handleInterviewAnswer = () => {
+    if (!currentAnswer.trim() && INTERVIEW_QUESTIONS[interviewIndex].required) {
+      alert('This field is required');
+      return;
+    }
+
+    const newAnswers = [...interviewAnswers];
+    newAnswers[interviewIndex] = currentAnswer;
+    setInterviewAnswers(newAnswers);
+    setCurrentAnswer('');
+
+    if (interviewIndex < INTERVIEW_QUESTIONS.length - 1) {
+      setInterviewIndex(interviewIndex + 1);
+    }
+  };
+
+  const handleSkipQuestion = () => {
+    if (interviewIndex < INTERVIEW_QUESTIONS.length - 1) {
+      setInterviewIndex(interviewIndex + 1);
+      setCurrentAnswer('');
+    }
+  };
+
+  const handleCheckMyFitFromScratch = async () => {
+    if (!interviewAnswers[0]?.trim()) {
+      alert('Name is required');
+      return;
+    }
+    setPendingMode('scratch');
+    setAppMode('analyzing');
+    const cvText = INTERVIEW_QUESTIONS.map((q, i) => `${q.question}\n${interviewAnswers[i] || '(skipped)'}`).join('\n\n');
+    await runAnalysis(cvText);
+  };
+
+  const handleAnalysisAnswer = (answer: string) => {
+    const newAnswers = [...analysisAnswers, answer];
+    setAnalysisAnswers(newAnswers);
+    setCurrentAnalysisAnswer('');
+    // If all questions answered, proceed to payment
+    if (newAnswers.length >= analysisQuestions.length) {
+      setAppMode('payment');
+    }
+  };
+
+  const downloadCV = async (cvData: CVData) => {
+    const response = await fetch('/api/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cvData }),
+    });
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cvData.name?.replace(/\s+/g, '-') || 'cv'}-tailored.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = async () => {
+    if (!cvJson) return;
+    try {
+      await downloadCV(cvJson);
+    } catch {
+      alert('Error downloading file');
+    }
+  };
+
+  const handleRefine = async () => {
+    if (refinementCount >= 3 || !refinementFeedback.trim()) return;
+    setIsRefining(true);
+
+    try {
+      // Re-parse current files so newly added files are included
+      let cvText = pendingCvContent;
+      if (cvFiles.length > 0) {
+        const parsed = await Promise.all(
+          cvFiles.map(async (file) => {
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd });
+            const d = await res.json();
+            return d.success ? d.text : '';
+          })
+        );
+        cvText = parsed.filter(Boolean).join('\n\n---\n\n');
+        setPendingCvContent(cvText);
+      }
+
+      const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cvText,
+          jobDescription: jobDescription.trim() || null,
+          additionalInfo: additionalInfo.trim() || null,
+          answers: qa,
+          currentTailoredCV: JSON.stringify(cvJson),
+          feedback: refinementFeedback,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const newCount = refinementCount + 1;
+        setCvJson(data.cvData);
+        setRefinementCount(newCount);
+        setRefinementFeedback('');
+        setRefinementChanges(data.changes || []);
+        saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: newCount, refinementChanges: data.changes || [] });
+        await downloadCV(data.cvData);
+      } else {
+        alert(data.error || 'Error refining CV');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Error refining CV');
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  if (appMode === 'mode-selection') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-3">
+              One CV won&apos;t get you every job
+            </h1>
+            <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl">
+              Each job description is different. Your CV should be too. AI-tailored in 2 minutes — matched to the role, not just your experience.
+            </p>
+          </div>
+        </section>
+
+        <main className="max-w-2xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button onClick={() => setAppMode('existing-cv')} className="group relative bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 hover:shadow-xl transition-all">
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-6 h-6 text-blue-600" />
+              </div>
+              <FileText className="w-12 h-12 text-blue-600 mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">I Have a CV</h2>
+              <p className="text-slate-600 dark:text-slate-300">Tailor it for a role</p>
+            </button>
+
+            <button onClick={() => { setAppMode('interview'); setInterviewIndex(0); setInterviewAnswers(Array(INTERVIEW_QUESTIONS.length).fill('')); setCurrentAnswer(''); }} className="group relative bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 hover:shadow-xl transition-all">
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-6 h-6 text-purple-600" />
+              </div>
+              <Plus className="w-12 h-12 text-purple-600 mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Create from Scratch</h2>
+              <p className="text-slate-600 dark:text-slate-300">Guided step by step</p>
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (appMode === 'payment') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-8 max-w-md w-full">
+          {SKIP_PAYMENT && (
+            <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800 dark:text-amber-200">DEV MODE — Payment skipped</p>
+            </div>
+          )}
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Generate Your CV</h2>
+          <p className="text-slate-600 dark:text-slate-300 mb-6">One-time payment for CV generation + 3 refinements included</p>
+          
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-700 dark:text-slate-300 font-medium">Total Price</span>
+              <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">₹{PRICE_INR}</span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">UPI payment only · Secure checkout by Razorpay</p>
+          </div>
+
+          <button 
+            onClick={handlePayment}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            Pay & Generate
+          </button>
+
+          <button
+            onClick={() => {
+              setPendingCvContent('');
+              setPendingMode(null);
+              setAppMode('mode-selection');
+            }}
+            className="w-full mt-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold py-2 px-6 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (appMode === 'interview') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <button onClick={() => setAppMode('mode-selection')} className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-4 flex items-center gap-1">← Back</button>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Create Your CV</h1>
+            <p className="text-slate-600 dark:text-slate-300 mt-2">Question {interviewIndex + 1} of {INTERVIEW_QUESTIONS.length}</p>
+          </div>
+        </section>
+
+        <main className="max-w-2xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+          <div className="space-y-6">
+            <div className="space-y-4">
+              {interviewAnswers.map((answer, idx) => (
+                answer && (
+                  <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">{INTERVIEW_QUESTIONS[idx].question}</p>
+                    <p className="text-slate-900 dark:text-white">{answer}</p>
+                  </div>
+                )
+              ))}
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+              <p className="text-lg font-semibold text-slate-900 dark:text-white mb-4">{INTERVIEW_QUESTIONS[interviewIndex].question}</p>
+              <textarea value={currentAnswer} onChange={(e) => setCurrentAnswer(e.target.value)} placeholder="Type your answer here..." rows={3} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) { if (interviewIndex === INTERVIEW_QUESTIONS.length - 1) { handleCheckMyFitFromScratch(); } else { handleInterviewAnswer(); } } }} />
+              <div className="flex gap-3 mt-4">
+                {interviewIndex === INTERVIEW_QUESTIONS.length - 1 ? (
+                  <button
+                    onClick={handleCheckMyFitFromScratch}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Check my fit
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={handleInterviewAnswer} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Next</button>
+                    {!INTERVIEW_QUESTIONS[interviewIndex].required && (<button onClick={handleSkipQuestion} className="flex-1 bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 text-slate-900 dark:text-white font-semibold py-2 px-4 rounded-lg transition-colors">Skip</button>)}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Job Description (Optional)</label>
+              <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={4} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+            </div>
+
+            <div ref={interviewEndRef} />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (appMode === 'existing-cv') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        {/* Hints modal */}
+        {showHintsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowHintsModal(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Sample bullet points</h3>
+                <button onClick={() => setShowHintsModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="px-6 pt-3 pb-1 text-sm text-slate-500 dark:text-slate-400">Copy any bullet that applies to you and paste it into Additional information.</p>
+              <div className="overflow-y-auto flex-1 px-6 pb-6 mt-2 space-y-2">
+                {HINT_CATEGORIES.map((cat) => (
+                  <div key={cat.label} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setOpenHintCategory(openHintCategory === cat.label ? null : cat.label)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{cat.label}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${openHintCategory === cat.label ? 'rotate-90' : ''}`} />
+                    </button>
+                    {openHintCategory === cat.label && (
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {cat.bullets.map((bullet) => (
+                          <li key={bullet} className="flex items-start gap-3 px-4 py-3">
+                            <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{bullet}</span>
+                            <button
+                              onClick={() => copyHint(bullet)}
+                              className="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                            >
+                              {copiedHint === bullet ? 'Copied!' : 'Copy'}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <button onClick={() => setAppMode('mode-selection')} className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-4 flex items-center gap-1">← Back</button>
+            <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">Upload your CV</h1>
+            <p className="text-lg text-slate-600 dark:text-slate-300">Add your documents and we&apos;ll tailor them to the role</p>
+          </div>
+        </section>
+
+        <main className="max-w-2xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><FileText className="w-5 h-5" />Your documents</h2>
+              {cvFiles.length < 3 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mb-2 flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Choose files
+                  </button>
+                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" multiple onChange={handleFileAdd} className="hidden" />
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">PDF or Word · up to 3 files · CV, cover letter, certificates — anything that helps</p>
+                </>
+              )}
+              {cvFiles.length > 0 ? (
+                <div className="space-y-2 mb-4">
+                  {cvFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{file.name}</span>
+                      <button onClick={() => removeFile(idx)} className="text-red-600 hover:text-red-700"><X className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 dark:text-slate-500 mb-4">No files uploaded yet</p>
+              )}
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-300 dark:border-slate-600"></div></div>
+                <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400">or</span></div>
+              </div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Additional information</label>
+              <textarea
+                value={additionalInfo}
+                onChange={(e) => setAdditionalInfo(e.target.value)}
+                placeholder="Add achievements, skills, or experiences not covered in your uploaded documents"
+                rows={6}
+                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+              <button
+                onClick={() => { setShowHintsModal(true); setOpenHintCategory(null); }}
+                className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Need ideas? See examples
+              </button>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Job Description</h2>
+              <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={6} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+            </div>
+
+            <button
+              onClick={handleCheckMyFitFromExisting}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+            >
+              Check my fit
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (appMode === 'analyzing') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="text-center">
+          <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
+          <p className="text-slate-600 dark:text-slate-300 mt-2">Comparing your background against the role</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (appMode === 'analysis') {
+    const currentQ = analysisQuestions[analysisAnswers.length] ?? null;
+    const allAnswered = analysisAnswers.length >= analysisQuestions.length;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Here&apos;s what the role needs</h1>
+          </div>
+        </section>
+
+        <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 space-y-6">
+          {/* JD Requirements */}
+          {jdRequirements.length > 0 && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-3">
+              {jdRequirements.map((req, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  {req.match_status === 'strong_match' && (
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  {req.match_status === 'partial_match' && (
+                    <span className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 block" />
+                    </span>
+                  )}
+                  {req.match_status === 'not_found' && (
+                    <X className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  <span className="text-sm text-slate-700 dark:text-slate-300">{req.requirement}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Questions section */}
+          {analysisQuestions.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">A few quick questions to strengthen your CV</h2>
+
+              {/* Answered questions (faded) */}
+              {analysisAnswers.map((ans, idx) => (
+                <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-1 opacity-60">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{analysisQuestions[idx].question}</p>
+                  <p className="text-sm text-slate-800 dark:text-slate-200">{ans || '(skipped)'}</p>
+                </div>
+              ))}
+
+              {/* Current question */}
+              {currentQ && (
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 cv-fade-in">
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white mb-4">{currentQ.question}</p>
+
+                  {currentQ.options ? (
+                    <div className="flex flex-col gap-2">
+                      {currentQ.options.map((opt: string) => (
+                        <button
+                          key={opt}
+                          onClick={() => handleAnalysisAnswer(opt)}
+                          className="text-left px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-800 dark:text-slate-200 transition-colors"
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handleAnalysisAnswer('')}
+                        className="text-left px-4 py-2.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-slate-400 transition-colors text-sm"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        value={currentAnalysisAnswer}
+                        onChange={(e) => setCurrentAnalysisAnswer(e.target.value)}
+                        placeholder="Type your answer…"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleAnalysisAnswer(currentAnalysisAnswer); }}
+                      />
+                      <div className="flex gap-3 mt-3">
+                        <button
+                          onClick={() => handleAnalysisAnswer(currentAnalysisAnswer)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          {analysisAnswers.length < analysisQuestions.length - 1 ? 'Next' : 'Done'}
+                        </button>
+                        <button
+                          onClick={() => handleAnalysisAnswer('')}
+                          className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pay button — shown when no questions, or all answered */}
+          {(analysisQuestions.length === 0 || allAnswered) && (
+            <button
+              onClick={() => setAppMode('payment')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 cv-fade-in"
+            >
+              Pay &amp; Generate — ₹{PRICE_INR}
+            </button>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  if (appMode === 'generating') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="text-center">
+          <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Generating your CV...</h2>
+          <p className="text-slate-600 dark:text-slate-300 mt-2">This may take a moment</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (appMode === 'success' && cvJson) {
+    const refinesLeft = 3 - refinementCount;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        {/* Hints modal (reused from existing-cv screen) */}
+        {showHintsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowHintsModal(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Sample bullet points</h3>
+                <button onClick={() => setShowHintsModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+              <p className="px-6 pt-3 pb-1 text-sm text-slate-500 dark:text-slate-400">Copy any bullet that applies to you and paste it into Additional information.</p>
+              <div className="overflow-y-auto flex-1 px-6 pb-6 mt-2 space-y-2">
+                {HINT_CATEGORIES.map((cat) => (
+                  <div key={cat.label} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <button onClick={() => setOpenHintCategory(openHintCategory === cat.label ? null : cat.label)} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{cat.label}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${openHintCategory === cat.label ? 'rotate-90' : ''}`} />
+                    </button>
+                    {openHintCategory === cat.label && (
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {cat.bullets.map((bullet) => (
+                          <li key={bullet} className="flex items-start gap-3 px-4 py-3">
+                            <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{bullet}</span>
+                            <button onClick={() => copyHint(bullet)} className="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                              {copiedHint === bullet ? 'Copied!' : 'Copy'}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tailor Another CV confirmation modal */}
+        {showTailorAnotherModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowTailorAnotherModal(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <p className="text-slate-900 dark:text-white text-base mb-6">
+                {refinesLeft > 0
+                  ? `You still have ${refinesLeft} refinement${refinesLeft === 1 ? '' : 's'} left — you can tweak your current CV at no extra cost. Starting a new CV will require a fresh payment of ₹${PRICE_INR}. Continue anyway?`
+                  : `Starting a new CV will require a fresh payment of ₹${PRICE_INR}. Continue?`}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowTailorAnotherModal(false)}
+                  className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  Keep refining
+                </button>
+                <button
+                  onClick={clearSession}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  Start new CV
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+          <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV is Ready</h1>
+            <button onClick={handleDownload} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+              <Download className="w-5 h-5" />
+              Download Word Doc
+            </button>
+          </div>
+        </section>
+
+        <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 space-y-6">
+          {/* Refinement — shown first */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Want to improve it?</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              {refinesLeft > 0 ? `${refinesLeft} refinement${refinesLeft === 1 ? '' : 's'} remaining` : 'All refinements used'}
+            </p>
+
+            {refinementChanges.length > 0 && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />What changed in this version
+                </h3>
+                <ul className="space-y-1">
+                  {refinementChanges.map((change, idx) => (
+                    <li key={idx} className="flex gap-2 text-sm text-green-800 dark:text-green-200">
+                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{change}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <textarea
+              value={refinementFeedback}
+              onChange={(e) => setRefinementFeedback(e.target.value)}
+              placeholder="Tell us what to change — e.g., emphasize leadership more, shorten the summary, add SQL skills"
+              rows={3}
+              disabled={refinementCount >= 3}
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+            <button
+              onClick={handleRefine}
+              disabled={refinementCount >= 3 || isRefining || !refinementFeedback.trim()}
+              className="mt-3 w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              {isRefining ? (
+                <><Loader className="w-4 h-4 animate-spin" /> Refining…</>
+              ) : refinementCount >= 3 ? (
+                'All refinements used'
+              ) : (
+                <><RefreshCw className="w-4 h-4" /> Refine CV — Refinement {refinementCount + 1} of 3</>
+              )}
+            </button>
+          </div>
+
+          {/* Inputs — editable below refinement */}
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><FileText className="w-5 h-5" />Your documents</h2>
+            {cvFiles.length < 3 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mb-2 flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Choose files
+                </button>
+                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" multiple onChange={handleFileAdd} className="hidden" />
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">PDF or Word · up to 3 files</p>
+              </>
+            )}
+            {cvFiles.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {cvFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{file.name}</span>
+                    <button onClick={() => removeFile(idx)} className="text-red-600 hover:text-red-700"><X className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 dark:text-slate-500 mb-4">No files uploaded yet</p>
+            )}
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-300 dark:border-slate-600"></div></div>
+              <div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400">or add text</span></div>
+            </div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Additional information</label>
+            <textarea
+              value={additionalInfo}
+              onChange={(e) => setAdditionalInfo(e.target.value)}
+              placeholder="Add achievements, skills, or experiences not covered in your uploaded documents"
+              rows={5}
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            />
+            <button onClick={() => { setShowHintsModal(true); setOpenHintCategory(null); }} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              Need ideas? See examples
+            </button>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Job Description</h2>
+            <textarea
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              placeholder="Paste the job description here (optional)"
+              rows={5}
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            />
+          </div>
+        </main>
+
+        <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8 text-center">
+          <button
+            onClick={() => setShowTailorAnotherModal(true)}
+            className="text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 underline underline-offset-2 transition-colors"
           >
-            Documentation
-          </a>
+            Tailor Another CV
+          </button>
         </div>
-      </main>
-    </div>
-  );
+      </div>
+    );
+  }
+
+  if (appMode === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="text-center max-w-md">
+          <X className="w-12 h-12 text-red-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Something went wrong</h2>
+          <p className="text-slate-600 dark:text-slate-300 mt-2">{errorMsg}</p>
+          <button onClick={clearSession} className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg">Start Over</button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
