@@ -278,7 +278,7 @@ export default function Home() {
         theme: { color: '#2B579A' },
         method: {
           upi: true,
-          card: false,
+          card: true,
           netbanking: false,
           wallet: false,
           emi: false,

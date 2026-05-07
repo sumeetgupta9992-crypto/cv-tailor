@@ -53,7 +53,7 @@ Summary Rules
 Bullet Character Constraint
 
 • Default target: each bullet should fit in one line in a standard Word document (Calibri 10.5pt, 0.5-inch margins).
-• Each bullet point must be under 100 characters including spaces. This is a hard limit — no exceptions. If a bullet exceeds 100 characters, rewrite it to be more concise.
+• Each bullet point must be 110-120 characters including spaces. 120 character is a hard limit — no exceptions. If a bullet exceeds 120 characters, rewrite it to be more concise.
 • ALWAYS count and verify character length for every bullet before sharing. Do not eyeball it.
 • If a bullet exceeds the limit, rewrite it. Do not just truncate — restructure the sentence.
 • If a bullet is significantly under the limit, it's wasting space. Add a relevant detail or combine with another thin bullet.
