@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('[Razorpay] Verifying — order_id:', razorpay_order_id, '| payment_id:', razorpay_payment_id);
+
     // Create signature to verify
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = crypto
@@ -28,6 +30,10 @@ export async function POST(request: NextRequest) {
 
     const isValidSignature = expectedSignature === razorpay_signature;
 
+    console.log('[Razorpay] Signature valid:', isValidSignature,
+      '| expected prefix:', expectedSignature.slice(0, 8),
+      '| received prefix:', razorpay_signature.slice(0, 8));
+
     if (!isValidSignature) {
       console.error('[Razorpay] Signature mismatch — order:', razorpay_order_id, '| payment:', razorpay_payment_id);
       return NextResponse.json(
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Razorpay] Payment verified — payment_id:', razorpay_payment_id);
+    console.log('[Razorpay] Payment verified ✅ — payment_id:', razorpay_payment_id);
     return NextResponse.json({ success: true, paymentId: razorpay_payment_id });
   } catch (error) {
     console.error('[Razorpay] Verification error:', error);

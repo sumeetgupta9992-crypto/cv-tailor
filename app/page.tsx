@@ -266,6 +266,11 @@ export default function Home() {
         return;
       }
 
+      // Track whether the success handler fired, so ondismiss can distinguish
+      // a manual close from a UPI "pending" close (where neither handler nor
+      // payment.failed fires, leaving the user silently stuck on payment screen).
+      let paymentHandlerFired = false;
+
       const options = {
         key: razorpayKey,
         order_id: orderData.orderId,
@@ -274,8 +279,22 @@ export default function Home() {
         name: 'CV Tailor',
         description: 'CV generation + 3 refinements',
         handler: async (response: any) => {
+          paymentHandlerFired = true;
           try {
-            console.log('[Razorpay] Payment callback received — payment_id:', response.razorpay_payment_id);
+            console.log('[Razorpay] ✅ Payment handler fired', {
+              payment_id: response.razorpay_payment_id,
+              order_id: response.razorpay_order_id,
+              signature: response.razorpay_signature ? response.razorpay_signature.slice(0, 16) + '…' : 'MISSING',
+            });
+
+            if (!response.razorpay_payment_id || !response.razorpay_order_id || !response.razorpay_signature) {
+              console.error('[Razorpay] Incomplete response — missing fields', response);
+              setErrorMsg('Payment response incomplete. Please contact support with payment ID: ' + (response.razorpay_payment_id || 'unknown'));
+              setAppMode('error');
+              return;
+            }
+
+            console.log('[Razorpay] Calling /api/verify-payment…');
             const verifyRes = await fetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -287,24 +306,33 @@ export default function Home() {
             });
 
             const verifyData = await verifyRes.json();
+            console.log('[Razorpay] Verify response:', { success: verifyData.success, error: verifyData.error });
+
             if (verifyData.success) {
+              console.log('[Razorpay] Verification passed — proceeding to generate');
               setIsPaid(true);
               await proceedAfterPayment();
             } else {
               console.error('[Razorpay] Verification failed:', verifyData.error);
-              setErrorMsg(verifyData.error || 'Payment verification failed');
+              setErrorMsg(verifyData.error || 'Payment verification failed. Please contact support.');
               setAppMode('error');
             }
           } catch (error) {
-            console.error('[Razorpay] Verification request error:', error);
-            setErrorMsg(error instanceof Error ? error.message : 'Payment verification error');
+            console.error('[Razorpay] Error in payment handler:', error);
+            setErrorMsg(error instanceof Error ? error.message : 'Payment handler error');
             setAppMode('error');
           }
         },
         modal: {
           ondismiss: () => {
-            console.log('[Razorpay] Checkout dismissed by user');
-            // Stay on payment screen — user can retry
+            console.log('[Razorpay] Modal dismissed — handler had fired:', paymentHandlerFired);
+            if (!paymentHandlerFired) {
+              // User closed manually OR UPI payment is "pending" (bank confirming).
+              // In the pending case neither handler nor payment.failed fires.
+              setErrorMsg('Payment was not completed. If you made a UPI payment and were charged, please contact support with your UPI transaction ID.');
+              setAppMode('error');
+            }
+            // If handler already fired we're mid-flow (generating) — don't interfere.
           },
         },
         prefill: {
@@ -349,6 +377,19 @@ export default function Home() {
   // Called immediately after payment. Files are already parsed and stored in pendingCvContent
   // from the analyze step. Analysis answers are already collected. Just generate.
   const proceedAfterPayment = async () => {
+    console.log('[proceedAfterPayment] entered', {
+      cvLength: pendingCvContent.length,
+      questionsCount: analysisQuestions.length,
+      answersCount: analysisAnswers.length,
+    });
+
+    if (!pendingCvContent.trim()) {
+      console.error('[proceedAfterPayment] pendingCvContent is empty — cannot generate');
+      setErrorMsg('CV content was lost. Please go back and re-upload your CV.');
+      setAppMode('error');
+      return;
+    }
+
     const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
     await generateCV(pendingCvContent, qa);
   };
