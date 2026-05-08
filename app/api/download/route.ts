@@ -8,6 +8,10 @@ import {
   AlignmentType,
   BorderStyle,
   TabStopType,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
 } from "docx";
 
 type Contact = {
@@ -54,19 +58,19 @@ const RIGHT_TAB = 10100;
 
 function sectionHeader(title: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: title, bold: true, size: 22, color: "000000" })],
+    children: [new TextRun({ text: title, bold: true, size: 22, color: "2B579A" })],
     border: {
-      bottom: { color: "000000", style: BorderStyle.SINGLE, size: 4, space: 4 },
+      bottom: { color: "2B579A", style: BorderStyle.SINGLE, size: 4, space: 4 },
     },
-    spacing: { before: 200, after: 40 },
+    spacing: { before: 80, after: 40 },
   });
 }
 
 function bulletParagraph(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: "•\t", size: 21, color: "000000" }),
-      ...parseBoldRuns(text, 21, "000000"),
+      new TextRun({ text: "•\t", size: 21, color: "1A1A1A" }),
+      ...parseBoldRuns(text, 21, "1A1A1A"),
     ],
     indent: { left: 240, hanging: 240 },
     spacing: { before: 0, after: 0, line: 240 },
@@ -85,7 +89,7 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
   const hasLinkedIn = Boolean(contact.linkedin?.trim());
   if (textItems.length === 0 && !hasLinkedIn) return null;
 
-  const sep = () => new TextRun({ text: "  |  ", size: 19, color: "4A4A4A" });
+  const sep = () => new TextRun({ text: "  |  ", size: 20, color: "888888" });
 
   // Using a typed union that docx accepts for Paragraph children
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +97,7 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
 
   textItems.forEach((item, i) => {
     if (i > 0) children.push(sep());
-    children.push(new TextRun({ text: item, size: 19, color: "4A4A4A" }));
+    children.push(new TextRun({ text: item, size: 20, color: "888888" }));
   });
 
   if (hasLinkedIn) {
@@ -104,7 +108,8 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
       new ExternalHyperlink({
         link: href,
         children: [
-          new TextRun({ text: raw, size: 19 }),
+          // Let Word's built-in hyperlink style (blue, underlined) apply
+          new TextRun({ text: raw, size: 20 }),
         ],
       })
     );
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const children: Paragraph[] = [];
+    const children: (Paragraph | Table)[] = [];
 
     // ── Name ──────────────────────────────────────────────────────────────
     // Spec: 18pt, bold, centered, dark blue #2B579A, all caps
@@ -140,7 +145,7 @@ export async function POST(request: NextRequest) {
             text: cvData.name.toUpperCase(),
             bold: true,
             size: 28,         // 14pt = 28 half-points
-            color: "000000",
+            color: "2B579A",
           }),
         ],
         alignment: AlignmentType.CENTER,
@@ -179,9 +184,7 @@ export async function POST(request: NextRequest) {
       children.push(sectionHeader("SUMMARY"));
       children.push(
         new Paragraph({
-          children: [
-            new TextRun({ text: cvData.summary, size: 21, color: "000000" }),
-          ],
+          children: parseBoldRuns(cvData.summary, 19, "1A1A1A"),
           spacing: { before: 40, after: 60 },
         })
       );
@@ -195,16 +198,39 @@ export async function POST(request: NextRequest) {
       children.push(sectionHeader("EXPERIENCE"));
 
       for (const exp of cvData.experience) {
-        // Company + date
+        // Company + date — table avoids tab-stop rendering issues in Google Docs
+        const noBorder = { style: BorderStyle.NONE, size: 0, color: "auto" };
         children.push(
-          new Paragraph({
-            children: [
-              new TextRun({ text: exp.company, bold: true, size: 22, color: "000000" }),
-              new TextRun({ text: "\t", size: 22 }),
-              new TextRun({ text: exp.duration, size: 20, color: "666666" }),
+          new Table({
+            width: { size: 10466, type: WidthType.DXA },
+            borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder, insideHorizontal: noBorder, insideVertical: noBorder },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 7466, type: WidthType.DXA },
+                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
+                    margins: { top: 120, bottom: 0, left: 0, right: 0 },
+                    children: [
+                      new Paragraph({
+                        children: [new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" })],
+                      }),
+                    ],
+                  }),
+                  new TableCell({
+                    width: { size: 3000, type: WidthType.DXA },
+                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
+                    margins: { top: 120, bottom: 0, left: 0, right: 0 },
+                    children: [
+                      new Paragraph({
+                        alignment: AlignmentType.RIGHT,
+                        children: [new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" })],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
             ],
-            tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
-            spacing: { before: 120, after: 0 },
           })
         );
 
@@ -212,7 +238,7 @@ export async function POST(request: NextRequest) {
         children.push(
           new Paragraph({
             children: [
-              new TextRun({ text: exp.title, italics: true, size: 21, color: "4A4A4A" }),
+              new TextRun({ text: exp.title, bold: true, size: 20, color: "444444" }),
             ],
             spacing: { before: 0, after: 0 },
           })
@@ -254,8 +280,8 @@ export async function POST(request: NextRequest) {
           children: [
             new TextRun({
               text: cvData.skills.join("  •  "),
-              size: 21,
-              color: "000000",
+              size: 19,
+              color: "1A1A1A",
             }),
           ],
           spacing: { before: 40, after: 0 },
