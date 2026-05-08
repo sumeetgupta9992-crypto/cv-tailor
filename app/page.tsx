@@ -6,6 +6,7 @@ import { supabase } from '@/app/lib/supabase';
 
 const PRICE_INR = 99;
 const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
+const ADMIN_EMAILS = ['p14sumeetg@iima.ac.in', 'sumeetgupta9992@gmail.com'];
 const SESSION_STORAGE_KEY = 'cv-tailor-session';
 const SESSION_EXPIRY_HOURS = 24;
 
@@ -312,10 +313,22 @@ export default function Home() {
         theme: { color: '#2B579A' },
         method: {
           upi: true,
-          card: true,
+          card: false,
           netbanking: false,
           wallet: false,
           emi: false,
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'Pay via UPI',
+                instruments: [{ method: 'upi' }],
+              },
+            },
+            sequence: ['block.upi'],
+            preferences: { show_default_blocks: false },
+          },
         },
       };
 
@@ -500,13 +513,22 @@ export default function Home() {
     await runAnalysis(cvText);
   };
 
+  const isAdminEmail = (email: string) => ADMIN_EMAILS.includes(email.trim().toLowerCase());
+
+  const goToPaymentOrGenerate = () => {
+    if (SKIP_PAYMENT || isAdminEmail(userEmail)) {
+      proceedAfterPayment();
+    } else {
+      setAppMode('payment');
+    }
+  };
+
   const handleAnalysisAnswer = (answer: string) => {
     const newAnswers = [...analysisAnswers, answer];
     setAnalysisAnswers(newAnswers);
     setCurrentAnalysisAnswer('');
-    // If all questions answered, proceed to payment
     if (newAnswers.length >= analysisQuestions.length) {
-      setAppMode('payment');
+      goToPaymentOrGenerate();
     }
   };
 
@@ -994,12 +1016,17 @@ export default function Home() {
 
           {/* Pay button — shown when no questions, or all answered */}
           {(analysisQuestions.length === 0 || allAnswered) && (
-            <button
-              onClick={() => setAppMode('payment')}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 cv-fade-in"
-            >
-              Pay &amp; Generate — ₹{PRICE_INR}
-            </button>
+            <div className="cv-fade-in">
+              <button
+                onClick={goToPaymentOrGenerate}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {isAdminEmail(userEmail) ? 'Generate CV' : `Pay & Generate — ₹${PRICE_INR}`}
+              </button>
+              {isAdminEmail(userEmail) && (
+                <p className="text-center text-xs text-slate-400 mt-1">Admin access</p>
+              )}
+            </div>
           )}
         </main>
       </div>

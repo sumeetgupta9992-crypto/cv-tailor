@@ -54,19 +54,19 @@ const RIGHT_TAB = 10100;
 
 function sectionHeader(title: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text: title, bold: true, size: 22, color: "2B579A" })],
+    children: [new TextRun({ text: title, bold: true, size: 22, color: "000000" })],
     border: {
-      bottom: { color: "2B579A", style: BorderStyle.SINGLE, size: 4, space: 4 },
+      bottom: { color: "000000", style: BorderStyle.SINGLE, size: 4, space: 4 },
     },
-    spacing: { before: 80, after: 40 },
+    spacing: { before: 200, after: 40 },
   });
 }
 
 function bulletParagraph(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: "•\t", size: 21, color: "1A1A1A" }),
-      ...parseBoldRuns(text, 21, "1A1A1A"),
+      new TextRun({ text: "•\t", size: 21, color: "000000" }),
+      ...parseBoldRuns(text, 21, "000000"),
     ],
     indent: { left: 240, hanging: 240 },
     spacing: { before: 0, after: 0, line: 240 },
@@ -85,7 +85,7 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
   const hasLinkedIn = Boolean(contact.linkedin?.trim());
   if (textItems.length === 0 && !hasLinkedIn) return null;
 
-  const sep = () => new TextRun({ text: "  |  ", size: 20, color: "888888" });
+  const sep = () => new TextRun({ text: "  |  ", size: 19, color: "4A4A4A" });
 
   // Using a typed union that docx accepts for Paragraph children
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +93,7 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
 
   textItems.forEach((item, i) => {
     if (i > 0) children.push(sep());
-    children.push(new TextRun({ text: item, size: 20, color: "888888" }));
+    children.push(new TextRun({ text: item, size: 19, color: "4A4A4A" }));
   });
 
   if (hasLinkedIn) {
@@ -104,8 +104,7 @@ function buildContactParagraph(contact: Contact): Paragraph | null {
       new ExternalHyperlink({
         link: href,
         children: [
-          // Let Word's built-in hyperlink style (blue, underlined) apply
-          new TextRun({ text: raw, size: 20 }),
+          new TextRun({ text: raw, size: 19 }),
         ],
       })
     );
@@ -141,7 +140,7 @@ export async function POST(request: NextRequest) {
             text: cvData.name.toUpperCase(),
             bold: true,
             size: 28,         // 14pt = 28 half-points
-            color: "2B579A",
+            color: "000000",
           }),
         ],
         alignment: AlignmentType.CENTER,
@@ -181,7 +180,7 @@ export async function POST(request: NextRequest) {
       children.push(
         new Paragraph({
           children: [
-            new TextRun({ text: cvData.summary, size: 19, color: "1A1A1A" }),
+            new TextRun({ text: cvData.summary, size: 21, color: "000000" }),
           ],
           spacing: { before: 40, after: 60 },
         })
@@ -200,9 +199,9 @@ export async function POST(request: NextRequest) {
         children.push(
           new Paragraph({
             children: [
-              new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" }),
+              new TextRun({ text: exp.company, bold: true, size: 22, color: "000000" }),
               new TextRun({ text: "\t", size: 22 }),
-              new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" }),
+              new TextRun({ text: exp.duration, size: 20, color: "666666" }),
             ],
             tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
             spacing: { before: 120, after: 0 },
@@ -213,7 +212,7 @@ export async function POST(request: NextRequest) {
         children.push(
           new Paragraph({
             children: [
-              new TextRun({ text: exp.title, bold: true, size: 20, color: "444444" }),
+              new TextRun({ text: exp.title, italics: true, size: 21, color: "4A4A4A" }),
             ],
             spacing: { before: 0, after: 0 },
           })
@@ -255,8 +254,8 @@ export async function POST(request: NextRequest) {
           children: [
             new TextRun({
               text: cvData.skills.join("  •  "),
-              size: 19,
-              color: "1A1A1A",
+              size: 21,
+              color: "000000",
             }),
           ],
           spacing: { before: 40, after: 0 },
