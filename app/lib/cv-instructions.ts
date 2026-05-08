@@ -58,6 +58,21 @@ Bullet Character Constraint
 • If a bullet exceeds the limit, rewrite it. Do not just truncate — restructure the sentence.
 • If a bullet is significantly under the limit, it's wasting space. Add a relevant detail or combine with another thin bullet.
 
+CONTENT INCLUSION RULES
+
+• Your goal is to fill exactly one page. Not half a page. Not one and a half pages. Exactly one.
+• First, include all sections from the original CV: Summary, Experience, Education, Skills, Projects, Certifications, Publications, Interests — whatever the candidate provided.
+• If all sections fit on one page, keep everything. A half-empty CV is a failure. Add back content, expand bullets, include more detail.
+• If content overflows one page, cut in this priority order (cut least important first):
+  1. Interests and Hobbies (cut first)
+  2. Certifications not relevant to the JD
+  3. Projects not relevant to the JD
+  4. Reduce bullets on the oldest or least relevant roles to 2 per role
+  5. Remove the oldest role only if it adds nothing to the JD
+• Never cut Education, Skills, or Summary.
+• Never cut a section entirely if the CV is under one page.
+• Use 2-4 bullets per role depending on relevance and available space.
+
 Section-Specific Rules
 
 Tagline (below name)
@@ -67,9 +82,8 @@ Tagline (below name)
 • For freshers: use target role + key skill areas. E.g., "Product Analyst | Data Analytics · Growth · Consumer Tech"
 
 Work Experience
-• For 8+ years: 3-5 bullets per current/recent role, 2-3 for older roles. Most recent role gets the most space.
-• For 4-7 years: 3-4 bullets per role.
-• For freshers: 2-3 bullets per internship/project. Focus on what you BUILT or DELIVERED, not what you learned.
+• Use 2-4 bullets per role depending on relevance and available space (see Content Inclusion Rules above).
+• For freshers: focus on what you BUILT or DELIVERED, not what you learned.
 • Reverse chronological order. Most recent first.
 • Internships older than 5 years should be removed for experienced professionals.
 • If the user has held multiple roles at the same company, merge when in doubt.
