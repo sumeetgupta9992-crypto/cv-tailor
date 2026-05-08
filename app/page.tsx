@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle } from 'lucide-react';
+import { supabase } from '@/app/lib/supabase';
 
 const PRICE_INR = 99;
 const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
@@ -38,6 +39,8 @@ type SessionData = {
   refinementChanges: string[];
   expiryTime: number;
   pendingCvContent: string;
+  email: string;
+  supabaseRowId: string | null;
 };
 
 const INTERVIEW_QUESTIONS = [
@@ -80,6 +83,8 @@ export default function Home() {
   const [openHintCategory, setOpenHintCategory] = useState<string | null>(null);
   const [copiedHint, setCopiedHint] = useState<string | null>(null);
   const [showTailorAnotherModal, setShowTailorAnotherModal] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [supabaseRowId, setSupabaseRowId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
@@ -171,6 +176,8 @@ export default function Home() {
             setRefinementCount(session.refinementCount);
             setRefinementChanges(session.refinementChanges);
             setPendingCvContent(session.pendingCvContent || session.cvContent || '');
+            if (session.email) setUserEmail(session.email);
+            if (session.supabaseRowId) setSupabaseRowId(session.supabaseRowId);
             setAppMode('success');
           } else {
             // Session expired
@@ -194,6 +201,8 @@ export default function Home() {
       cvJson,
       refinementCount,
       refinementChanges,
+      email: userEmail,
+      supabaseRowId,
       expiryTime: Date.now() + SESSION_EXPIRY_HOURS * 60 * 60 * 1000,
       ...overrides,
     };
@@ -217,6 +226,8 @@ export default function Home() {
     setAnalysisQuestions([]);
     setAnalysisAnswers([]);
     setCurrentAnalysisAnswer('');
+    setUserEmail('');
+    setSupabaseRowId(null);
     setAppMode('mode-selection');
   };
 
@@ -233,20 +244,37 @@ export default function Home() {
       const orderData = await orderRes.json();
 
       if (!orderData.success) {
-        setErrorMsg('Failed to create payment order');
+        setErrorMsg(orderData.error || 'Failed to create payment order');
+        setAppMode('error');
+        return;
+      }
+
+      const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+      console.log('[Razorpay] Opening checkout — key:', razorpayKey, '| order_id:', orderData.orderId);
+
+      if (!razorpayKey) {
+        setErrorMsg('Razorpay public key is missing. Check NEXT_PUBLIC_RAZORPAY_KEY_ID env var.');
+        setAppMode('error');
+        return;
+      }
+
+      const razorpayWindow = (window as any).Razorpay;
+      if (!razorpayWindow) {
+        setErrorMsg('Razorpay checkout script failed to load. Please disable any ad blockers and try again.');
+        setAppMode('error');
         return;
       }
 
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+        key: razorpayKey,
         order_id: orderData.orderId,
-        amount: PRICE_INR * 100,
+        amount: 9900, // paise — must match order; here for display only
         currency: 'INR',
         name: 'CV Tailor',
-        description: 'Generate your tailored CV',
+        description: 'CV generation + 3 refinements',
         handler: async (response: any) => {
           try {
-            // Verify payment
+            console.log('[Razorpay] Payment callback received — payment_id:', response.razorpay_payment_id);
             const verifyRes = await fetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -262,18 +290,24 @@ export default function Home() {
               setIsPaid(true);
               await proceedAfterPayment();
             } else {
-              setErrorMsg('Payment verification failed');
+              console.error('[Razorpay] Verification failed:', verifyData.error);
+              setErrorMsg(verifyData.error || 'Payment verification failed');
               setAppMode('error');
             }
           } catch (error) {
-            setErrorMsg('Payment verification error');
+            console.error('[Razorpay] Verification request error:', error);
+            setErrorMsg(error instanceof Error ? error.message : 'Payment verification error');
             setAppMode('error');
           }
         },
+        modal: {
+          ondismiss: () => {
+            console.log('[Razorpay] Checkout dismissed by user');
+            // Stay on payment screen — user can retry
+          },
+        },
         prefill: {
-          name: 'User',
-          email: '',
-          contact: '',
+          email: userEmail.trim() || '',
         },
         theme: { color: '#2B579A' },
         method: {
@@ -285,12 +319,15 @@ export default function Home() {
         },
       };
 
-      const razorpayWindow = (window as any).Razorpay;
-      if (razorpayWindow) {
-        const rzp = new razorpayWindow(options);
-        rzp.open();
-      }
+      const rzp = new razorpayWindow(options);
+      rzp.on('payment.failed', (response: any) => {
+        console.error('[Razorpay] Payment failed:', response.error);
+        setErrorMsg(response.error?.description || response.error?.reason || 'Payment failed');
+        setAppMode('error');
+      });
+      rzp.open();
     } catch (error) {
+      console.error('[Razorpay] handlePayment error:', error);
       setErrorMsg(error instanceof Error ? error.message : 'Payment error');
       setAppMode('error');
     }
@@ -323,7 +360,30 @@ export default function Home() {
       const data = await response.json();
       if (data.success) {
         setCvJson(data.cvData);
-        saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: 0, refinementChanges: [] });
+
+        // Save to Supabase — non-blocking, errors don't affect the flow
+        let rowId: string | null = null;
+        try {
+          const { data: row, error } = await supabase
+            .from('cv_generations')
+            .insert({
+              email: userEmail.trim() || null,
+              job_description: jobDescription.trim().slice(0, 500) || null,
+              cv_content: data.cvData,
+              refinement_count: 0,
+              payment_status: 'pending',
+              flow_type: pendingMode === 'scratch' ? 'from_scratch' : 'existing_cv',
+              source_cv_text: cvText.slice(0, 1000) || null,
+            })
+            .select('id')
+            .single();
+          if (!error && row) rowId = row.id;
+        } catch (e) {
+          console.error('Supabase insert error:', e);
+        }
+
+        setSupabaseRowId(rowId);
+        saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: 0, refinementChanges: [], supabaseRowId: rowId });
         setAppMode('success');
       } else {
         setErrorMsg(data.error || 'Error generating CV');
@@ -519,6 +579,19 @@ export default function Home() {
         setRefinementCount(newCount);
         setRefinementFeedback('');
         setRefinementChanges(data.changes || []);
+
+        // Update Supabase row — non-blocking
+        if (supabaseRowId) {
+          try {
+            await supabase
+              .from('cv_generations')
+              .update({ cv_content: data.cvData, refinement_count: newCount })
+              .eq('id', supabaseRowId);
+          } catch (e) {
+            console.error('Supabase update error:', e);
+          }
+        }
+
         saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: newCount, refinementChanges: data.changes || [] });
         await downloadCV(data.cvData);
       } else {
@@ -792,10 +865,26 @@ export default function Home() {
   if (appMode === 'analyzing') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <div className="text-center">
+        <div className="w-full max-w-sm px-4 text-center">
           <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
-          <p className="text-slate-600 dark:text-slate-300 mt-2">Comparing your background against the role</p>
+          <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Comparing your background against the role</p>
+
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-5 text-left">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Where should we send updates?
+            </label>
+            <input
+              type="email"
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+              placeholder="your@email.com"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+            <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+              We&apos;ll use this to save your session. No spam, ever.
+            </p>
+          </div>
         </div>
       </div>
     );
