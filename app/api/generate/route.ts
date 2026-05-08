@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
     if (currentTailoredCV && feedback) {
       userPrompt = `Refine the tailored CV below based on the user's feedback. Apply all CV writing rules from your instructions.
 
+⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
+
 Original CV:
 ${cvText}${addlContext}${jdContext}${qaContext}
 
@@ -69,6 +71,8 @@ In the "changes" array, list 3-5 specific improvements made (e.g., "Reordered bu
 Return ONLY valid JSON. No markdown, no explanation.`;
     } else {
       userPrompt = `${jobDescription ? 'Tailor' : 'Create'} the following CV${jobDescription ? ' for the job description provided' : ' highlighting the candidate\'s strongest experiences'}. Apply all CV writing rules from your instructions.
+
+⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
 
 CV Content:
 ${cvText}${addlContext}${jdContext}${qaContext}
@@ -93,6 +97,39 @@ Return ONLY the JSON object. No markdown, no explanation.`;
     // Handle both direct CV data and wrapped response with changes
     const cvData = parsed.cvData || parsed;
     const changes = parsed.changes || null;
+
+    // Post-processing: validate bullet point character limits
+    const bulletValidationWarnings: string[] = [];
+    const checkBullets = (bullets: string[], section: string) => {
+      if (Array.isArray(bullets)) {
+        bullets.forEach((bullet, idx) => {
+          // Remove markdown bold markers for accurate character count
+          const cleanBullet = bullet.replace(/\*\*.*?\*\*/g, (match) => match.slice(2, -2));
+          const charCount = cleanBullet.length;
+          if (charCount > 115) {
+            bulletValidationWarnings.push(`[${section}] Bullet ${idx + 1} exceeds 115 chars: ${charCount} chars - "${cleanBullet.substring(0, 80)}..."`);
+          }
+        });
+      }
+    };
+
+    // Check all sections
+    if (cvData.experience) {
+      cvData.experience.forEach((exp, idx) => {
+        checkBullets(exp.bullets, `Experience[${idx}] ${exp.company}`);
+      });
+    }
+    if (cvData.projects) {
+      cvData.projects.forEach((proj, idx) => {
+        checkBullets(proj.bullets, `Projects[${idx}] ${proj.name}`);
+      });
+    }
+
+    if (bulletValidationWarnings.length > 0) {
+      console.warn('[generate] 🚨 BULLET CHARACTER LIMIT VIOLATIONS:', bulletValidationWarnings);
+    } else {
+      console.log('[generate] ✅ All bullets under 115 characters');
+    }
 
     return NextResponse.json({ success: true, cvData, changes });
   } catch (error) {
