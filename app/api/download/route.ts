@@ -8,10 +8,6 @@ import {
   AlignmentType,
   BorderStyle,
   TabStopType,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
 } from "docx";
 
 type Contact = {
@@ -134,7 +130,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const children: (Paragraph | Table)[] = [];
+    const children: Paragraph[] = [];
 
     // ── Name ──────────────────────────────────────────────────────────────
     // Spec: 18pt, bold, centered, dark blue #2B579A, all caps
@@ -198,39 +194,16 @@ export async function POST(request: NextRequest) {
       children.push(sectionHeader("EXPERIENCE"));
 
       for (const exp of cvData.experience) {
-        // Company + date — table avoids tab-stop rendering issues in Google Docs
-        const noBorder = { style: BorderStyle.NONE, size: 0, color: "auto" };
+        // Company + date — tab stop right-aligns date; ATS-friendly plain text
         children.push(
-          new Table({
-            width: { size: 10466, type: WidthType.DXA },
-            borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder, insideHorizontal: noBorder, insideVertical: noBorder },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    width: { size: 7466, type: WidthType.DXA },
-                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
-                    margins: { top: 120, bottom: 0, left: 0, right: 0 },
-                    children: [
-                      new Paragraph({
-                        children: [new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" })],
-                      }),
-                    ],
-                  }),
-                  new TableCell({
-                    width: { size: 3000, type: WidthType.DXA },
-                    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
-                    margins: { top: 120, bottom: 0, left: 0, right: 0 },
-                    children: [
-                      new Paragraph({
-                        alignment: AlignmentType.RIGHT,
-                        children: [new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" })],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" }),
+              new TextRun({ text: "\t", size: 22 }),
+              new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" }),
             ],
+            tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
+            spacing: { before: 120, after: 0 },
           })
         );
 
