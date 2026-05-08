@@ -169,6 +169,11 @@ export default function Home() {
     setTimeout(() => setCopiedHint(null), 1500);
   };
 
+  // Ensure the "Tailor Another CV" modal is never open when entering the success screen
+  useEffect(() => {
+    if (appMode === 'success') setShowTailorAnotherModal(false);
+  }, [appMode]);
+
   // Load Razorpay script and restore session from localStorage
   useEffect(() => {
     // Load Razorpay script
@@ -247,6 +252,7 @@ export default function Home() {
     setSupabaseRowId(null);
     setAnalysisReady(false);
     setDetectedName('');
+    setShowTailorAnotherModal(false);
     setAppMode('mode-selection');
   };
 
