@@ -30,6 +30,11 @@ type Education = {
   year: string;
 };
 
+type Project = {
+  name: string;
+  bullets: string[];
+};
+
 type CVData = {
   name: string;
   tagline?: string;
@@ -38,6 +43,10 @@ type CVData = {
   skills: string[];
   experience: Experience[];
   education: Education[];
+  projects?: Project[];
+  certifications?: string[];
+  publications?: string[];
+  interests?: string[];
 };
 
 // Split "**bold**" markers into TextRun arrays
@@ -257,6 +266,59 @@ export async function POST(request: NextRequest) {
               color: "1A1A1A",
             }),
           ],
+          spacing: { before: 40, after: 0 },
+        })
+      );
+    }
+
+    // ── Projects ──────────────────────────────────────────────────────────
+    if (cvData.projects?.length) {
+      children.push(sectionHeader("PROJECTS"));
+      for (const proj of cvData.projects) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: proj.name, bold: true, size: 20, color: "1A1A1A" })],
+            spacing: { before: 60, after: 0 },
+          })
+        );
+        for (const bullet of proj.bullets) {
+          children.push(bulletParagraph(bullet));
+        }
+      }
+    }
+
+    // ── Certifications ────────────────────────────────────────────────────
+    if (cvData.certifications?.length) {
+      children.push(sectionHeader("CERTIFICATIONS"));
+      for (const cert of cvData.certifications) {
+        children.push(
+          new Paragraph({
+            children: parseBoldRuns(cert, 19, "1A1A1A"),
+            spacing: { before: 40, after: 0 },
+          })
+        );
+      }
+    }
+
+    // ── Publications ──────────────────────────────────────────────────────
+    if (cvData.publications?.length) {
+      children.push(sectionHeader("PUBLICATIONS"));
+      for (const pub of cvData.publications) {
+        children.push(
+          new Paragraph({
+            children: parseBoldRuns(pub, 19, "1A1A1A"),
+            spacing: { before: 40, after: 0 },
+          })
+        );
+      }
+    }
+
+    // ── Interests ─────────────────────────────────────────────────────────
+    if (cvData.interests?.length) {
+      children.push(sectionHeader("INTERESTS"));
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: cvData.interests.join("  •  "), size: 19, color: "1A1A1A" })],
           spacing: { before: 40, after: 0 },
         })
       );

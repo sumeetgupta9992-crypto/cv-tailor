@@ -76,6 +76,9 @@ ${cvText}${addlContext}${jdContext}${qaContext}
 Return ONLY the JSON object. No markdown, no explanation.`;
     }
 
+    console.log('[generate] system prompt (first 500 chars):', CV_INSTRUCTIONS.slice(0, 500));
+    console.log('[generate] user prompt (first 500 chars):', userPrompt.slice(0, 500));
+
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
