@@ -7,6 +7,20 @@ import { supabase } from '@/app/lib/supabase';
 const PRICE_INR = 99;
 const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
 const ADMIN_EMAILS = ['p14sumeetg@iima.ac.in', 'sumeetgupta9992@gmail.com'];
+
+function extractEmailFromText(text: string): string | null {
+  const m = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : null;
+}
+
+function extractNameFromText(text: string): string | null {
+  const first = text.split('\n').map(l => l.trim()).find(l => l.length > 0) ?? null;
+  // Accept as a name only if it's short and looks like words (not an email/URL/code line)
+  if (first && first.length <= 60 && /^[a-zA-Z]/.test(first) && !/[@/\\|=]/.test(first)) {
+    return first;
+  }
+  return null;
+}
 const SESSION_STORAGE_KEY = 'cv-tailor-session';
 const SESSION_EXPIRY_HOURS = 24;
 
@@ -86,6 +100,8 @@ export default function Home() {
   const [showTailorAnotherModal, setShowTailorAnotherModal] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [supabaseRowId, setSupabaseRowId] = useState<string | null>(null);
+  const [analysisReady, setAnalysisReady] = useState(false);
+  const [detectedName, setDetectedName] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
@@ -229,6 +245,8 @@ export default function Home() {
     setCurrentAnalysisAnswer('');
     setUserEmail('');
     setSupabaseRowId(null);
+    setAnalysisReady(false);
+    setDetectedName('');
     setAppMode('mode-selection');
   };
 
@@ -468,6 +486,13 @@ export default function Home() {
     setAnalysisAnswers([]);
     setCurrentAnalysisAnswer('');
     setErrorMsg('');
+    setAnalysisReady(false);
+
+    // Extract name + email from CV text and pre-fill if not already set
+    const extracted = extractNameFromText(cvText);
+    if (extracted) setDetectedName(extracted);
+    const extractedEmail = extractEmailFromText(cvText);
+    if (extractedEmail) setUserEmail(prev => prev.trim() ? prev : extractedEmail);
 
     try {
       const res = await fetch('/api/analyze', {
@@ -482,7 +507,8 @@ export default function Home() {
       if (data.success) {
         setJdRequirements(data.jd_requirements ?? []);
         setAnalysisQuestions(data.questions ?? []);
-        setAppMode('analysis');
+        // Don't auto-advance — let the user click Continue
+        setAnalysisReady(true);
       } else {
         setErrorMsg(data.error || 'Analysis failed');
         setAppMode('error');
@@ -929,14 +955,30 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="w-full max-w-sm px-4 text-center">
-          <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
-          <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Comparing your background against the role</p>
+          {analysisReady ? (
+            <>
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysis complete</h2>
+              <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Ready to show you how you match up</p>
+            </>
+          ) : (
+            <>
+              <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
+              <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Comparing your background against the role</p>
+            </>
+          )}
 
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-5 text-left">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Where should we send updates?
-            </label>
+            {detectedName ? (
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Hi {detectedName}, just need your email to continue.
+              </p>
+            ) : (
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Where should we send updates?
+              </label>
+            )}
             <input
               type="email"
               value={userEmail}
@@ -947,6 +989,15 @@ export default function Home() {
             <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
               We&apos;ll use this to save your session. No spam, ever.
             </p>
+
+            {analysisReady && (
+              <button
+                onClick={() => setAppMode('analysis')}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
+              >
+                Continue →
+              </button>
+            )}
           </div>
         </div>
       </div>
