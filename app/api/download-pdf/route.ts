@@ -477,18 +477,22 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
       if (isArr) {
         y = renderWrappedText(doc, (cvData.skills as string[]).join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
       } else {
-        const cats = cvData.skills as SkillCategories;
-        const catEntries = [
-          { key: 'languages', label: 'Languages' },
-          { key: 'frameworks_and_tools', label: 'Frameworks & Tools' },
-          { key: 'cloud_databases_infra', label: 'Cloud / Databases / Infra' },
-          { key: 'coursework', label: 'Coursework' },
+        const cats = cvData.skills as Record<string, string[]>;
+        const knownOrder = ['languages', 'frameworks_and_tools', 'cloud_databases_infra', 'coursework'];
+        const knownLabels: Record<string, string> = {
+          languages: 'Languages',
+          frameworks_and_tools: 'Frameworks & Tools',
+          cloud_databases_infra: 'Cloud / Databases / Infra',
+          coursework: 'Coursework',
+        };
+        const toLabel = (k: string) =>
+          knownLabels[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        const allKeys = [
+          ...knownOrder.filter((k) => Array.isArray(cats[k]) && cats[k].length),
+          ...Object.keys(cats).filter((k) => !knownOrder.includes(k) && Array.isArray(cats[k]) && cats[k].length),
         ];
-        for (const { key, label } of catEntries) {
-          const items = cats[key as keyof SkillCategories];
-          if (items?.length) {
-            y = renderMixedWrappedText(doc, `**${label}:** ${items.join('  •  ')}`, p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
-          }
+        for (const key of allKeys) {
+          y = renderMixedWrappedText(doc, sanitizeForPdf(`**${toLabel(key)}:** ${cats[key].join('  •  ')}`), p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
         }
       }
       y += gap(2);

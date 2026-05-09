@@ -353,26 +353,30 @@ export async function POST(request: NextRequest) {
             })
           );
         } else {
-          const cats = cvData.skills as SkillCategories;
-          const catEntries = [
-            { key: "languages", label: "Languages" },
-            { key: "frameworks_and_tools", label: "Frameworks & Tools" },
-            { key: "cloud_databases_infra", label: "Cloud / Databases / Infra" },
-            { key: "coursework", label: "Coursework" },
+          const cats = cvData.skills as Record<string, string[]>;
+          const knownOrder = ["languages", "frameworks_and_tools", "cloud_databases_infra", "coursework"];
+          const knownLabels: Record<string, string> = {
+            languages: "Languages",
+            frameworks_and_tools: "Frameworks & Tools",
+            cloud_databases_infra: "Cloud / Databases / Infra",
+            coursework: "Coursework",
+          };
+          const toLabel = (k: string) =>
+            knownLabels[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          const allKeys = [
+            ...knownOrder.filter((k) => Array.isArray(cats[k]) && cats[k].length),
+            ...Object.keys(cats).filter((k) => !knownOrder.includes(k) && Array.isArray(cats[k]) && cats[k].length),
           ];
-          for (const { key, label } of catEntries) {
-            const items = cats[key as keyof SkillCategories];
-            if (items?.length) {
-              children.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({ text: label + ": ", bold: true, size: 19, color: "1A1A1A" }),
-                    new TextRun({ text: items.join("  •  "), size: 19, color: "1A1A1A" }),
-                  ],
-                  spacing: { before: 20, after: 0 },
-                })
-              );
-            }
+          for (const key of allKeys) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: toLabel(key) + ": ", bold: true, size: 19, color: "1A1A1A" }),
+                  new TextRun({ text: cats[key].join("  •  "), size: 19, color: "1A1A1A" }),
+                ],
+                spacing: { before: 20, after: 0 },
+              })
+            );
           }
         }
       }
