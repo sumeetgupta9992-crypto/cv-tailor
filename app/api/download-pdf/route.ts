@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import chromium from '@sparticuz/chromium';
-import puppeteerCore from 'puppeteer-core';
+import { jsPDF } from 'jspdf';
 
 type Contact = {
   email?: string;
@@ -41,20 +40,154 @@ type CVData = {
   interests?: string[];
 };
 
-// Parse **bold** markers into <strong> tags
-function parseBoldToHTML(text: string): string {
-  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+// A4 page dimensions and layout constants (all in mm)
+const PAGE_W = 210;
+const PAGE_H = 297;
+const MARGIN = 12.7; // 0.5 inch
+const CONTENT_W = PAGE_W - MARGIN * 2;
+
+// Hex color → [r, g, b]
+function hex(h: string): [number, number, number] {
+  const v = h.replace('#', '');
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
 }
 
-// Build bullet point HTML with proper indentation
-function buildBulletHTML(bullet: string): string {
-  const parsed = parseBoldToHTML(bullet);
-  return `<div style="margin-left: 30px; margin-bottom: 4px; line-height: 1.2;">• ${parsed}</div>`;
+// Split text at **bold** markers → [{text, bold}]
+function parseBoldSegments(text: string): { text: string; bold: boolean }[] {
+  const parts = text.split(/\*\*(.*?)\*\*/);
+  return parts.map((p, i) => ({ text: p, bold: i % 2 === 1 }));
 }
 
-// Build section header HTML
-function buildSectionHeaderHTML(title: string): string {
-  return `<h2 style="font-size: 11pt; font-weight: bold; color: #2B579A; border-bottom: 1px solid #2B579A; padding-bottom: 4px; margin: 12px 0 6px 0;">${title}</h2>`;
+// Render mixed bold/normal text starting at x, y. Returns the final x after last segment.
+function renderMixedText(
+  doc: jsPDF,
+  segments: { text: string; bold: boolean }[],
+  x: number,
+  y: number,
+  fontSize: number,
+  color: string,
+  normalStyle: 'normal' | 'italic' = 'normal'
+): number {
+  doc.setFontSize(fontSize);
+  const [r, g, b] = hex(color);
+  doc.setTextColor(r, g, b);
+  let curX = x;
+  for (const seg of segments) {
+    if (!seg.text) continue;
+    const style = seg.bold ? 'bold' : normalStyle;
+    doc.setFont('helvetica', style);
+    doc.text(seg.text, curX, y);
+    curX += doc.getTextWidth(seg.text);
+  }
+  return curX;
+}
+
+// Wrap a long string to fit within maxWidth at given fontSize. Returns array of lines.
+function wrapText(doc: jsPDF, text: string, maxWidth: number, fontSize: number, fontStyle: 'normal' | 'bold' | 'italic' = 'normal'): string[] {
+  doc.setFontSize(fontSize);
+  doc.setFont('helvetica', fontStyle);
+  return doc.splitTextToSize(text, maxWidth) as string[];
+}
+
+// Render wrapped plain text block. Returns new y after the block.
+function renderWrappedText(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  fontSize: number,
+  color: string,
+  fontStyle: 'normal' | 'bold' | 'italic',
+  lineHeight: number
+): number {
+  const lines = wrapText(doc, text, maxWidth, fontSize, fontStyle);
+  const [r, g, b] = hex(color);
+  doc.setFontSize(fontSize);
+  doc.setFont('helvetica', fontStyle);
+  doc.setTextColor(r, g, b);
+  for (const line of lines) {
+    doc.text(line, x, y);
+    y += lineHeight;
+  }
+  return y;
+}
+
+// Render a bullet point with bold-marker support. Returns new y.
+function renderBullet(doc: jsPDF, text: string, x: number, y: number, maxWidth: number): number {
+  const fontSize = 9.5;
+  const lineH = 4.5;
+  const bulletIndent = 5;
+  const textIndent = x + bulletIndent + 2;
+  const textWidth = maxWidth - bulletIndent - 2;
+
+  // Draw bullet glyph
+  doc.setFontSize(fontSize);
+  doc.setFont('helvetica', 'normal');
+  const [r, g, b] = hex('1A1A1A');
+  doc.setTextColor(r, g, b);
+  doc.text('•', x + bulletIndent, y);
+
+  // Wrap the full plain text to measure lines
+  const plainText = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  const lines = wrapText(doc, plainText, textWidth, fontSize, 'normal');
+
+  // First line: render with bold segments
+  const segments = parseBoldSegments(text);
+
+  // Pre-wrap aware rendering: render segments across the first line width
+  const firstLineLimit = textWidth;
+  doc.setFontSize(fontSize);
+  let curX = textIndent;
+  const firstLineText: { text: string; bold: boolean }[] = [];
+
+  // Collect segments that fit on first line
+  for (const seg of segments) {
+    firstLineText.push(seg);
+  }
+
+  // Simple rendering: put all on first line (jsPDF handles overflow via splitTextToSize)
+  // For multi-line bullets, render plain after the first
+  if (lines.length === 1) {
+    renderMixedText(doc, segments, textIndent, y, fontSize, '1A1A1A');
+    y += lineH;
+  } else {
+    // Render all lines as plain (bold segments often don't span lines predictably)
+    for (const line of lines) {
+      doc.setFontSize(fontSize);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(r, g, b);
+      // Re-apply bold for segments on this line
+      const lineSegs = parseBoldSegments(line.replace(/\*\*/g, ''));
+      doc.text(line.replace(/\*\*(.*?)\*\*/g, '$1'), textIndent, y);
+      y += lineH;
+    }
+  }
+
+  return y;
+}
+
+// Draw section header with blue underline. Returns new y.
+function sectionHeader(doc: jsPDF, title: string, y: number): number {
+  const [r, g, b] = hex('2B579A');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(r, g, b);
+  doc.text(title, MARGIN, y);
+  y += 1.5;
+  doc.setDrawColor(r, g, b);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
+  return y + 4;
+}
+
+// Check if we're about to overflow the page; add new page if so.
+function checkPage(doc: jsPDF, y: number, needed = 8): number {
+  if (y + needed > PAGE_H - MARGIN) {
+    doc.addPage();
+    return MARGIN + 4;
+  }
+  return y;
 }
 
 export async function POST(request: NextRequest) {
@@ -63,278 +196,183 @@ export async function POST(request: NextRequest) {
     const { cvData }: { cvData: CVData } = body;
 
     if (!cvData) {
-      return NextResponse.json(
-        { success: false, error: 'CV data is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'CV data is required' }, { status: 400 });
     }
 
-    let html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      font-family: 'Calibri', sans-serif;
-      font-size: 10pt;
-      color: #1A1A1A;
-      line-height: 1.4;
-      padding: 0.5in;
-      max-width: 8.5in;
-      margin: 0 auto;
-    }
-    .name {
-      font-size: 18pt;
-      font-weight: bold;
-      color: #2B579A;
-      text-align: center;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .tagline {
-      font-size: 10.5pt;
-      color: #444444;
-      text-align: center;
-      margin-bottom: 6px;
-    }
-    .contact {
-      font-size: 9pt;
-      color: #888888;
-      text-align: center;
-      margin-bottom: 12px;
-    }
-    .contact-item {
-      display: inline;
-    }
-    .contact-sep {
-      display: inline;
-      margin: 0 4px;
-    }
-    .summary-section {
-      margin-bottom: 12px;
-      line-height: 1.5;
-    }
-    .summary-text {
-      font-size: 9.5pt;
-      line-height: 1.5;
-    }
-    .experience-item {
-      margin-bottom: 8px;
-    }
-    .company-line {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 2px;
-    }
-    .company-name {
-      font-weight: bold;
-      font-size: 11pt;
-      color: #1A1A1A;
-    }
-    .duration {
-      font-style: italic;
-      font-size: 9.5pt;
-      color: #888888;
-    }
-    .role-title {
-      font-weight: bold;
-      font-size: 10pt;
-      color: #444444;
-      margin-bottom: 2px;
-    }
-    .education-item {
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-    }
-    .education-info {
-      flex-grow: 1;
-    }
-    .institution {
-      font-weight: bold;
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    .degree {
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    .education-year {
-      font-style: italic;
-      font-size: 9.5pt;
-      color: #888888;
-      white-space: nowrap;
-      margin-left: 12px;
-    }
-    .skills-list {
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    .projects-item {
-      margin-bottom: 8px;
-    }
-    .project-name {
-      font-weight: bold;
-      font-size: 10pt;
-      color: #1A1A1A;
-      margin-bottom: 2px;
-    }
-    .certifications-item {
-      margin-bottom: 6px;
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    .publications-item {
-      margin-bottom: 6px;
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    .interests-list {
-      font-size: 9.5pt;
-      color: #1A1A1A;
-    }
-    h2 {
-      font-size: 11pt;
-      font-weight: bold;
-      color: #2B579A;
-      border-bottom: 1px solid #2B579A;
-      padding-bottom: 4px;
-      margin: 12px 0 6px 0;
-    }
-  </style>
-</head>
-<body>
-`;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    let y = MARGIN + 4;
 
-    // Name
-    html += `<div class="name">${cvData.name.toUpperCase()}</div>`;
+    // ── Name ──────────────────────────────────────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    const [nr, ng, nb] = hex('2B579A');
+    doc.setTextColor(nr, ng, nb);
+    doc.text(cvData.name.toUpperCase(), PAGE_W / 2, y, { align: 'center' });
+    y += 7;
 
-    // Tagline
+    // ── Tagline ───────────────────────────────────────────────────────────
     if (cvData.tagline?.trim()) {
-      html += `<div class="tagline">${cvData.tagline}</div>`;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.5);
+      const [tr, tg, tb] = hex('444444');
+      doc.setTextColor(tr, tg, tb);
+      doc.text(cvData.tagline, PAGE_W / 2, y, { align: 'center' });
+      y += 5.5;
     }
 
-    // Contact
+    // ── Contact line ──────────────────────────────────────────────────────
     if (cvData.contact) {
-      const items = [];
-      if (cvData.contact.email?.trim()) items.push(cvData.contact.email);
-      if (cvData.contact.phone?.trim()) items.push(cvData.contact.phone);
-      if (cvData.contact.location?.trim()) items.push(cvData.contact.location);
+      const items: string[] = [];
+      if (cvData.contact.email?.trim()) items.push(cvData.contact.email.trim());
+      if (cvData.contact.phone?.trim()) items.push(cvData.contact.phone.trim());
+      if (cvData.contact.location?.trim()) items.push(cvData.contact.location.trim());
+      if (cvData.contact.linkedin?.trim()) items.push(cvData.contact.linkedin.trim());
 
-      if (items.length > 0 || cvData.contact.linkedin?.trim()) {
-        html += `<div class="contact">`;
-        items.forEach((item, idx) => {
-          if (idx > 0) html += `<span class="contact-sep">|</span>`;
-          html += `<span class="contact-item">${item}</span>`;
-        });
-        if (cvData.contact.linkedin?.trim()) {
-          if (items.length > 0) html += `<span class="contact-sep">|</span>`;
-          const raw = cvData.contact.linkedin.trim();
-          const href = raw.startsWith('http') ? raw : `https://${raw}`;
-          html += `<span class="contact-item"><a href="${href}" style="color: #0563C1; text-decoration: none;">${raw}</a></span>`;
-        }
-        html += `</div>`;
+      if (items.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const [cr, cg, cb] = hex('888888');
+        doc.setTextColor(cr, cg, cb);
+        doc.text(items.join('  |  '), PAGE_W / 2, y, { align: 'center' });
+        y += 6;
       }
     }
 
-    // Summary
+    // ── Summary ───────────────────────────────────────────────────────────
     if (cvData.summary?.trim()) {
-      html += `<h2>SUMMARY</h2>`;
-      html += `<div class="summary-section"><div class="summary-text">${parseBoldToHTML(cvData.summary)}</div></div>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'SUMMARY', y);
+      y = renderWrappedText(doc, cvData.summary, MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
+      y += 3;
     }
 
-    // Experience
+    // ── Experience ────────────────────────────────────────────────────────
     if (cvData.experience?.length) {
-      html += `<h2>EXPERIENCE</h2>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'EXPERIENCE', y);
+
       for (const exp of cvData.experience) {
-        html += `<div class="experience-item">`;
-        html += `<div class="company-line"><span class="company-name">${exp.company}</span><span class="duration">${exp.duration}</span></div>`;
-        html += `<div class="role-title">${exp.title}</div>`;
+        y = checkPage(doc, y, 10);
+
+        // Company (bold, left) + Duration (italic grey, right) on same line
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        const [er, eg, eb] = hex('1A1A1A');
+        doc.setTextColor(er, eg, eb);
+        doc.text(exp.company, MARGIN, y);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9.5);
+        const [dr, dg, db] = hex('888888');
+        doc.setTextColor(dr, dg, db);
+        doc.text(exp.duration, MARGIN + CONTENT_W, y, { align: 'right' });
+        y += 4.5;
+
+        // Role title
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        const [rr, rg, rb] = hex('444444');
+        doc.setTextColor(rr, rg, rb);
+        doc.text(exp.title, MARGIN, y);
+        y += 4.5;
+
+        // Bullets
         for (const bullet of exp.bullets) {
-          html += buildBulletHTML(bullet);
+          y = checkPage(doc, y, 5);
+          y = renderBullet(doc, bullet, MARGIN, y, CONTENT_W);
         }
-        html += `</div>`;
+        y += 2;
       }
     }
 
-    // Education
+    // ── Education ─────────────────────────────────────────────────────────
     if (cvData.education?.length) {
-      html += `<h2>EDUCATION</h2>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'EDUCATION', y);
+
       for (const edu of cvData.education) {
-        html += `<div class="education-item">`;
-        html += `<div class="education-info"><span class="institution">${edu.institution}</span> — <span class="degree">${edu.degree}</span></div>`;
-        html += `<span class="education-year">${edu.year}</span>`;
-        html += `</div>`;
+        y = checkPage(doc, y, 6);
+        // Institution bold + degree, year right-aligned
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        const [ir, ig, ib] = hex('1A1A1A');
+        doc.setTextColor(ir, ig, ib);
+        const instW = doc.getTextWidth(edu.institution);
+        doc.text(edu.institution, MARGIN, y);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(`  —  ${edu.degree}`, MARGIN + instW, y);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9.5);
+        const [yr2, yg, yb] = hex('888888');
+        doc.setTextColor(yr2, yg, yb);
+        doc.text(edu.year, MARGIN + CONTENT_W, y, { align: 'right' });
+        y += 5;
       }
+      y += 1;
     }
 
-    // Skills
+    // ── Skills ────────────────────────────────────────────────────────────
     if (cvData.skills?.length) {
-      html += `<h2>SKILLS</h2>`;
-      html += `<div class="skills-list">${cvData.skills.join('  •  ')}</div>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'SKILLS', y);
+      y = renderWrappedText(doc, cvData.skills.join('  •  '), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
+      y += 2;
     }
 
-    // Projects
+    // ── Projects ──────────────────────────────────────────────────────────
     if (cvData.projects?.length) {
-      html += `<h2>PROJECTS</h2>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'PROJECTS', y);
+
       for (const proj of cvData.projects) {
-        html += `<div class="projects-item">`;
-        html += `<div class="project-name">${proj.name}</div>`;
+        y = checkPage(doc, y, 8);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        const [pr, pg, pb] = hex('1A1A1A');
+        doc.setTextColor(pr, pg, pb);
+        doc.text(proj.name, MARGIN, y);
+        y += 4.5;
         for (const bullet of proj.bullets) {
-          html += buildBulletHTML(bullet);
+          y = checkPage(doc, y, 5);
+          y = renderBullet(doc, bullet, MARGIN, y, CONTENT_W);
         }
-        html += `</div>`;
+        y += 2;
       }
     }
 
-    // Certifications
+    // ── Certifications ────────────────────────────────────────────────────
     if (cvData.certifications?.length) {
-      html += `<h2>CERTIFICATIONS</h2>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'CERTIFICATIONS', y);
       for (const cert of cvData.certifications) {
-        html += `<div class="certifications-item">${parseBoldToHTML(cert)}</div>`;
+        y = checkPage(doc, y, 5);
+        y = renderWrappedText(doc, cert.replace(/\*\*(.*?)\*\*/g, '$1'), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
       }
+      y += 2;
     }
 
-    // Publications
+    // ── Publications ──────────────────────────────────────────────────────
     if (cvData.publications?.length) {
-      html += `<h2>PUBLICATIONS</h2>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'PUBLICATIONS', y);
       for (const pub of cvData.publications) {
-        html += `<div class="publications-item">${parseBoldToHTML(pub)}</div>`;
+        y = checkPage(doc, y, 5);
+        y = renderWrappedText(doc, pub.replace(/\*\*(.*?)\*\*/g, '$1'), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
       }
+      y += 2;
     }
 
-    // Interests
+    // ── Interests ─────────────────────────────────────────────────────────
     if (cvData.interests?.length) {
-      html += `<h2>INTERESTS</h2>`;
-      html += `<div class="interests-list">${cvData.interests.join('  •  ')}</div>`;
+      y = checkPage(doc, y, 12);
+      y = sectionHeader(doc, 'INTERESTS', y);
+      y = renderWrappedText(doc, cvData.interests.join('  •  '), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
     }
 
-    html += `
-</body>
-</html>`;
-
-    // Convert HTML to PDF using puppeteer-core + @sparticuz/chromium (Vercel-compatible)
-    const browser = await puppeteerCore.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
-
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfUint8 = await page.pdf({
-      format: 'A4',
-      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
-      printBackground: true,
-    });
-    await browser.close();
-    const pdfBuffer = Buffer.from(pdfUint8);
+    // ── Output ────────────────────────────────────────────────────────────
+    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
 
     const safeName = cvData.name
       .replace(/[^a-zA-Z0-9\s-]/g, '')
@@ -349,10 +387,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[download-pdf] Error:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
