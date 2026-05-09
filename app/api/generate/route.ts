@@ -73,7 +73,7 @@ ACHIEVEMENTS AND CONTEST RANKS: Include ALL achievements, contest ranks, and rat
     if (currentTailoredCV && feedback) {
       userPrompt = `Refine the tailored CV below based on the user's feedback. Apply all CV writing rules from your instructions.
 
-⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
+⚠️  CRITICAL: Every bullet point must be under 115 characters. Target 105–115 characters, biased toward 115. Count each bullet. Expand short bullets with honest detail where the source supports it — do not fabricate. Only leave a bullet under 105 if the original point was inherently brief or context is too thin to elaborate.
 ${PRESERVATION_RULES}
 
 Original CV:
@@ -97,7 +97,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     } else {
       userPrompt = `${hasJD ? 'Tailor' : 'Improve'} the following CV${hasJD ? ' for the job description provided' : ' — formatting and language only, preserve all content'}. Apply all CV writing rules from your instructions.
 
-⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
+⚠️  CRITICAL: Every bullet point must be under 115 characters. Target 105–115 characters, biased toward 115. Count each bullet. Expand short bullets with honest detail where the source supports it — do not fabricate. Only leave a bullet under 105 if the original point was inherently brief or context is too thin to elaborate.
 ${PRESERVATION_RULES}
 
 CV Content:

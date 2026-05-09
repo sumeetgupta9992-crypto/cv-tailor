@@ -53,10 +53,11 @@ Summary Rules
 Bullet Character Constraint
 
 • Default target: each bullet should fit in one line in a standard Word document (Calibri 10.5pt, 0.5-inch margins).
-• Each bullet point MUST be under 115 characters including spaces. Target 110-115 characters. This is a HARD LIMIT — absolutely no exceptions. Count the characters. If a bullet exceeds 115 characters, rewrite it shorter. Never exceed 115.
+• Each bullet point MUST be under 115 characters including spaces. Target 105-115 characters, biased toward 115 — a bullet at 113 is better than one at 97. This is a HARD LIMIT — absolutely no exceptions. Count the characters. If a bullet exceeds 115 characters, rewrite it shorter. Never exceed 115.
 • ALWAYS count and verify character length for every bullet before sharing. Do not eyeball it.
 • If a bullet exceeds the limit, rewrite it. Do not just truncate — restructure the sentence.
-• If a bullet is significantly under the limit, it's wasting space. Add a relevant detail or combine with another thin bullet.
+• If a bullet is significantly under the limit, it's wasting space. Expand with a relevant detail, quantification, or outcome — do NOT fabricate. Only expand if the source material supports it. If the user's original point was genuinely short and there is nothing to add, keep it as-is rather than hallucinate.
+• Two exceptions where a short bullet is acceptable: (1) the user's original CV point was inherently brief and no honest elaboration exists; (2) the user provided very limited context about that role or project. In all other cases, push toward 115.
 
 CONTENT INCLUSION RULES
 
