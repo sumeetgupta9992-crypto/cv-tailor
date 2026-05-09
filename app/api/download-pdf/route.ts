@@ -113,58 +113,117 @@ function renderWrappedText(
   return y;
 }
 
+// Render mixed bold/normal wrapped text. Splits on ** markers and lays out word-by-word.
+function renderMixedWrappedText(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  startY: number,
+  maxWidth: number,
+  fontSize: number,
+  color: string,
+  lineHeight: number
+): number {
+  const [r, g, b] = hex(color);
+  doc.setFontSize(fontSize);
+  doc.setTextColor(r, g, b);
+
+  const segments = parseBoldSegments(text);
+  const tokens: { word: string; bold: boolean }[] = [];
+  for (const seg of segments) {
+    for (const word of seg.text.split(' ')) {
+      if (word) tokens.push({ word, bold: seg.bold });
+    }
+  }
+
+  let y = startY;
+  let curX = x;
+  let isFirst = true;
+
+  for (const { word, bold } of tokens) {
+    const style = bold ? 'bold' : 'normal';
+    doc.setFont('helvetica', style);
+    const wordW = doc.getTextWidth(word);
+
+    if (!isFirst) {
+      doc.setFont('helvetica', 'normal');
+      const spaceW = doc.getTextWidth(' ');
+      if (curX + spaceW + wordW > x + maxWidth) {
+        y += lineHeight;
+        curX = x;
+        doc.setFont('helvetica', style);
+        doc.text(word, curX, y);
+        curX += wordW;
+      } else {
+        curX += spaceW;
+        doc.setFont('helvetica', style);
+        doc.text(word, curX, y);
+        curX += wordW;
+      }
+    } else {
+      doc.text(word, curX, y);
+      curX += wordW;
+      isFirst = false;
+    }
+  }
+
+  return y + lineHeight;
+}
+
 // Render a bullet point with bold-marker support. Returns new y.
 function renderBullet(doc: jsPDF, text: string, x: number, y: number, maxWidth: number): number {
   const fontSize = 9.5;
   const lineH = 4.5;
   const bulletIndent = 5;
-  const textIndent = x + bulletIndent + 2;
+  const textX = x + bulletIndent + 2;
   const textWidth = maxWidth - bulletIndent - 2;
 
-  // Draw bullet glyph
+  const [r, g, b] = hex('1A1A1A');
   doc.setFontSize(fontSize);
   doc.setFont('helvetica', 'normal');
-  const [r, g, b] = hex('1A1A1A');
   doc.setTextColor(r, g, b);
   doc.text('•', x + bulletIndent, y);
 
-  // Wrap the full plain text to measure lines
-  const plainText = text.replace(/\*\*(.*?)\*\*/g, '$1');
-  const lines = wrapText(doc, plainText, textWidth, fontSize, 'normal');
-
-  // First line: render with bold segments
+  // Word-token layout: handles bold across all line counts
   const segments = parseBoldSegments(text);
-
-  // Pre-wrap aware rendering: render segments across the first line width
-  const firstLineLimit = textWidth;
-  doc.setFontSize(fontSize);
-  let curX = textIndent;
-  const firstLineText: { text: string; bold: boolean }[] = [];
-
-  // Collect segments that fit on first line
+  const tokens: { word: string; bold: boolean }[] = [];
   for (const seg of segments) {
-    firstLineText.push(seg);
-  }
-
-  // Simple rendering: put all on first line (jsPDF handles overflow via splitTextToSize)
-  // For multi-line bullets, render plain after the first
-  if (lines.length === 1) {
-    renderMixedText(doc, segments, textIndent, y, fontSize, '1A1A1A');
-    y += lineH;
-  } else {
-    // Render all lines as plain (bold segments often don't span lines predictably)
-    for (const line of lines) {
-      doc.setFontSize(fontSize);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(r, g, b);
-      // Re-apply bold for segments on this line
-      const lineSegs = parseBoldSegments(line.replace(/\*\*/g, ''));
-      doc.text(line.replace(/\*\*(.*?)\*\*/g, '$1'), textIndent, y);
-      y += lineH;
+    for (const word of seg.text.split(' ')) {
+      if (word) tokens.push({ word, bold: seg.bold });
     }
   }
 
-  return y;
+  let curX = textX;
+  let isFirst = true;
+
+  for (const { word, bold } of tokens) {
+    const style = bold ? 'bold' : 'normal';
+    doc.setFont('helvetica', style);
+    const wordW = doc.getTextWidth(word);
+
+    if (!isFirst) {
+      doc.setFont('helvetica', 'normal');
+      const spaceW = doc.getTextWidth(' ');
+      if (curX + spaceW + wordW > textX + textWidth) {
+        y += lineH;
+        curX = textX;
+        doc.setFont('helvetica', style);
+        doc.text(word, curX, y);
+        curX += wordW;
+      } else {
+        curX += spaceW;
+        doc.setFont('helvetica', style);
+        doc.text(word, curX, y);
+        curX += wordW;
+      }
+    } else {
+      doc.text(word, curX, y);
+      curX += wordW;
+      isFirst = false;
+    }
+  }
+
+  return y + lineH;
 }
 
 // Draw section header with blue underline. Returns new y.
@@ -242,7 +301,7 @@ export async function POST(request: NextRequest) {
     if (cvData.summary?.trim()) {
       y = checkPage(doc, y, 12);
       y = sectionHeader(doc, 'SUMMARY', y);
-      y = renderWrappedText(doc, cvData.summary, MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
+      y = renderMixedWrappedText(doc, cvData.summary, MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 4.5);
       y += 3;
     }
 
@@ -348,7 +407,7 @@ export async function POST(request: NextRequest) {
       y = sectionHeader(doc, 'CERTIFICATIONS', y);
       for (const cert of cvData.certifications) {
         y = checkPage(doc, y, 5);
-        y = renderWrappedText(doc, cert.replace(/\*\*(.*?)\*\*/g, '$1'), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
+        y = renderMixedWrappedText(doc, cert, MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 4.5);
       }
       y += 2;
     }
@@ -359,7 +418,7 @@ export async function POST(request: NextRequest) {
       y = sectionHeader(doc, 'PUBLICATIONS', y);
       for (const pub of cvData.publications) {
         y = checkPage(doc, y, 5);
-        y = renderWrappedText(doc, pub.replace(/\*\*(.*?)\*\*/g, '$1'), MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 'normal', 4.5);
+        y = renderMixedWrappedText(doc, pub, MARGIN, y, CONTENT_W, 9.5, '1A1A1A', 4.5);
       }
       y += 2;
     }
