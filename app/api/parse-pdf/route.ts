@@ -46,7 +46,14 @@ export async function POST(request: NextRequest) {
             },
             {
               type: 'text',
-              text: 'Please extract all the text from this PDF document and return it as plain text. Preserve the structure and formatting as much as possible.',
+              text: `Extract all text from this CV/resume PDF and return it as plain text. Preserve structure and formatting as much as possible.
+
+IMPORTANT — hyperlinks: if any text in the PDF is hyperlinked (e.g. the word "LinkedIn" links to a URL, or "github.com/user" is itself a hyperlink), you MUST include the full destination URL. Write it as: label (URL), for example:
+  LinkedIn (https://linkedin.com/in/username)
+  GitHub (https://github.com/username)
+  Portfolio (https://mysite.com)
+
+If the URL is already visible as text in the document, keep it as-is. Only add the parenthetical URL when the link text alone would not reveal the destination.`,
             },
           ],
         },

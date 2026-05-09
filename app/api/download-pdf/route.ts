@@ -108,6 +108,10 @@ function normalizeExp(exp: Experience): { company: string; duration: string; loc
   };
 }
 
+function safeHref(url: string): string {
+  return url.startsWith('http') ? url : `https://${url}`;
+}
+
 // jsPDF built-in helvetica does not have the ₹ glyph — substitute Rs.
 function sanitizeForPdf(text: string): string {
   if (text.includes('₹')) console.log('[download-pdf] ₹ detected, substituting Rs.:', text.substring(0, 80));
@@ -330,28 +334,54 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
     const contactLocation = cvData.location || cvData.contact?.location;
     const legacyLinkedIn = cvData.contact?.linkedin;
 
-    const parts: string[] = [];
-    if (contactEmail?.trim()) parts.push(contactEmail.trim());
-    if (contactPhone?.trim()) parts.push(contactPhone.trim());
-    if (contactLocation?.trim()) parts.push(contactLocation.trim());
-    if (legacyLinkedIn?.trim()) parts.push(legacyLinkedIn.trim());
-    for (const l of cvData.links || []) {
-      if (l.url?.trim()) parts.push(l.url.trim());
-    }
+    // Row 1: email | phone | location (plain gray)
+    const infoParts: string[] = [];
+    if (contactEmail?.trim()) infoParts.push(contactEmail.trim());
+    if (contactPhone?.trim()) infoParts.push(contactPhone.trim());
+    if (contactLocation?.trim()) infoParts.push(contactLocation.trim());
 
-    if (parts.length) {
+    if (infoParts.length) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       const [cr, cg, cb] = hex('888888');
       doc.setTextColor(cr, cg, cb);
-      const contactText = parts.join('  |  ');
-      const contactLines = doc.splitTextToSize(contactText, contentW) as string[];
-      for (const line of contactLines) {
-        doc.text(line, PAGE_W / 2, y, { align: 'center' });
-        y += 4;
-      }
-      y += 2;
+      doc.text(infoParts.join('  |  '), PAGE_W / 2, y, { align: 'center' });
+      y += 4;
     }
+
+    // Row 2: profile links as clickable blue labels
+    const allLinks: Link[] = [
+      ...(legacyLinkedIn?.trim() ? [{ label: 'LinkedIn', url: legacyLinkedIn.trim() }] : []),
+      ...(cvData.links || []).filter((l) => l.url?.trim()),
+    ];
+
+    if (allLinks.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      const sep = '  |  ';
+      const [sr, sg, sb] = hex('888888');
+      const [lr, lg, lb] = hex('2B579A');
+      const sepWidth = doc.getTextWidth(sep);
+      const labels = allLinks.map((l) => l.label || l.url);
+      const totalWidth = labels.reduce((sum, lbl, i) => sum + doc.getTextWidth(lbl) + (i < labels.length - 1 ? sepWidth : 0), 0);
+      let lx = (PAGE_W - totalWidth) / 2;
+      for (let i = 0; i < allLinks.length; i++) {
+        const lbl = labels[i];
+        const lw = doc.getTextWidth(lbl);
+        doc.setTextColor(lr, lg, lb);
+        doc.text(lbl, lx, y);
+        doc.link(lx, y - 3.5, lw, 4.5, { url: safeHref(allLinks[i].url) });
+        lx += lw;
+        if (i < allLinks.length - 1) {
+          doc.setTextColor(sr, sg, sb);
+          doc.text(sep, lx, y);
+          lx += sepWidth;
+        }
+      }
+      y += 4;
+    }
+
+    if (infoParts.length || allLinks.length) y += 2;
   }
 
   // ── Summary ───────────────────────────────────────────────────────────
@@ -514,14 +544,29 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
       doc.setTextColor(pr, pg, pb);
       doc.text(proj.name, p.margin, y);
 
-      // Project links right-aligned on same line
+      // Project links right-aligned on same line (clickable)
       if (proj.links?.length) {
-        const linkText = proj.links.map((l) => l.label).join(' | ');
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(p.bfs - 1);
         const [lr, lg, lb] = hex('2B579A');
         doc.setTextColor(lr, lg, lb);
-        doc.text(linkText, p.margin + contentW, y, { align: 'right' });
+        const sep = ' | ';
+        const sepW = doc.getTextWidth(sep);
+        // build right-to-left so we can annotate each link
+        let rx = p.margin + contentW;
+        for (let i = proj.links.length - 1; i >= 0; i--) {
+          const lbl = proj.links[i].label || proj.links[i].url;
+          const lw = doc.getTextWidth(lbl);
+          rx -= lw;
+          doc.text(lbl, rx, y);
+          if (proj.links[i].url?.trim()) {
+            doc.link(rx, y - 3.5, lw, 4.5, { url: safeHref(proj.links[i].url) });
+          }
+          if (i > 0) {
+            rx -= sepW;
+            doc.text(sep, rx, y);
+          }
+        }
       }
       y += p.lh;
 
