@@ -189,17 +189,19 @@ export default function Home() {
     if (appMode === 'success') setShowTailorAnotherModal(false);
   }, [appMode]);
 
-  // Push a history entry when entering analyzing/analysis so browser Back doesn't exit the app
+  // Push a history entry when entering screens that shouldn't let browser Back exit the app
   useEffect(() => {
-    if (appMode === 'analyzing') {
-      history.pushState({ portkey: 'analyzing' }, '');
+    if (appMode === 'analyzing' || appMode === 'payment') {
+      history.pushState({ portkey: appMode }, '');
     }
   }, [appMode]);
 
-  // Intercept browser Back from analyzing/analysis screens
+  // Intercept browser Back from analyzing/analysis/payment screens
   useEffect(() => {
     const handlePopState = () => {
-      if (appMode === 'analyzing' || appMode === 'analysis') {
+      if (appMode === 'payment') {
+        setAppMode('analysis');
+      } else if (appMode === 'analyzing' || appMode === 'analysis') {
         setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv');
       }
     };
@@ -1009,14 +1011,10 @@ export default function Home() {
           </button>
 
           <button
-            onClick={() => {
-              setPendingCvContent('');
-              setPendingMode(null);
-              setAppMode('mode-selection');
-            }}
+            onClick={() => setAppMode('analysis')}
             className="w-full mt-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold py-2 px-6 rounded-lg transition-colors"
           >
-            Cancel
+            ← Back
           </button>
         </div>
       </div>
@@ -1272,12 +1270,6 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="w-full max-w-sm px-4 text-center">
-          <button
-            onClick={() => setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv')}
-            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-6 flex items-center gap-1 text-sm mx-auto"
-          >
-            ← Back
-          </button>
           {analysisReady ? (
             <>
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
