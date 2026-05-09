@@ -108,6 +108,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const refinementTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const HINT_CATEGORIES = [
     {
@@ -616,6 +617,15 @@ export default function Home() {
       proceedAfterPayment();
     } else {
       setAppMode('payment');
+    }
+  };
+
+  const handleRefineButtonClick = () => {
+    if (refinementFeedback.trim()) {
+      handleRefine();
+    } else {
+      refinementTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => refinementTextareaRef.current?.focus(), 400);
     }
   };
 
@@ -1380,41 +1390,65 @@ export default function Home() {
           </div>
         </section>
 
-        <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 space-y-6">
-          {/* Refinement textarea — at top */}
+        {/* Sticky Refine bar — full width, always visible */}
+        <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <button
+              onClick={handleRefineButtonClick}
+              disabled={refinementCount >= 3 || isRefining}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-base"
+            >
+              {isRefining ? (
+                <><Loader className="w-5 h-5 animate-spin" /> Refining…</>
+              ) : refinementCount >= 3 ? (
+                'All refinements used'
+              ) : (
+                <><RefreshCw className="w-5 h-5" /> Refine CV — {refinesLeft} of 3 remaining</>
+              )}
+            </button>
+            {refinementCount < 3 && !isRefining && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-1.5">
+                {refinementFeedback.trim()
+                  ? 'Feedback ready — click Refine above to apply'
+                  : 'Add feedback below, upload new documents, or update the job description — then refine'}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 pb-24 md:pb-10 space-y-6">
+          {refinementChanges.length > 0 && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />What changed in this version
+              </h3>
+              <ul className="space-y-1">
+                {refinementChanges.map((change, idx) => (
+                  <li key={idx} className="flex gap-2 text-sm text-green-800 dark:text-green-200">
+                    <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Want to improve it?</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">What to improve?</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               {refinesLeft > 0 ? `${refinesLeft} refinement${refinesLeft === 1 ? '' : 's'} remaining` : 'All refinements used'}
             </p>
-
-            {refinementChanges.length > 0 && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />What changed in this version
-                </h3>
-                <ul className="space-y-1">
-                  {refinementChanges.map((change, idx) => (
-                    <li key={idx} className="flex gap-2 text-sm text-green-800 dark:text-green-200">
-                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                      <span>{change}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             <textarea
+              ref={refinementTextareaRef}
               value={refinementFeedback}
               onChange={(e) => setRefinementFeedback(e.target.value)}
               placeholder="Tell us what to change — e.g., emphasize leadership more, shorten the summary, add SQL skills"
-              rows={3}
+              rows={4}
               disabled={refinementCount >= 3}
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
-          {/* Update context section */}
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Update context if needed</p>
 
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
@@ -1471,32 +1505,29 @@ export default function Home() {
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             />
           </div>
-
-          {/* Refine button — full-width at very bottom */}
-          <button
-            onClick={handleRefine}
-            disabled={refinementCount >= 3 || isRefining || !refinementFeedback.trim()}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-4 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-base"
-          >
-            {isRefining ? (
-              <><Loader className="w-5 h-5 animate-spin" /> Refining…</>
-            ) : refinementCount >= 3 ? (
-              'All refinements used'
-            ) : (
-              <><RefreshCw className="w-5 h-5" /> Refine CV — {refinesLeft} refinement{refinesLeft === 1 ? '' : 's'} left</>
-            )}
-          </button>
-
-          <div className="text-center pb-4">
-            <button
-              onClick={() => setShowTailorAnotherModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Tailor Another CV
-            </button>
-          </div>
         </main>
+
+        {/* Floating "Tailor Another CV" — desktop: right side, vertical text */}
+        <div className="fixed right-5 top-1/2 -translate-y-1/2 z-30 hidden md:block">
+          <button
+            onClick={() => setShowTailorAnotherModal(true)}
+            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-semibold px-3 py-5 rounded-xl shadow-md hover:shadow-lg hover:border-purple-400 dark:hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-all"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            Tailor Another CV
+          </button>
+        </div>
+
+        {/* Mobile: sticky bottom bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-4 py-3 shadow-lg">
+          <button
+            onClick={() => setShowTailorAnotherModal(true)}
+            className="w-full border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Tailor Another CV
+          </button>
+        </div>
       </div>
     );
   }
