@@ -13,11 +13,21 @@ type Contact = {
   linkedin?: string;
 };
 
-type Experience = {
+type SubRole = {
   title: string;
+  subtitle?: string | null;
+  bullets: string[];
+};
+
+type Experience = {
   company: string;
   duration: string;
-  bullets: string[];
+  location?: string | null;
+  context?: string | null;
+  sub_roles?: SubRole[];
+  // legacy flat fields (backward compat)
+  title?: string;
+  bullets?: string[];
 };
 
 type Education = {
@@ -86,6 +96,23 @@ const LAYOUT_ATTEMPTS: LayoutParams[] = [
   { bfs: 9.0, lh: 4.05, margin: 12.7 }, // reduce line spacing 10%
   { bfs: 9.0, lh: 4.05, margin: 10.2 }, // reduce margin to 0.4in
 ];
+
+function normalizeExp(exp: Experience): { company: string; duration: string; location?: string | null; context?: string | null; sub_roles: SubRole[] } {
+  if (exp.sub_roles?.length) return exp as any;
+  return {
+    company: exp.company,
+    duration: exp.duration,
+    location: exp.location,
+    context: exp.context,
+    sub_roles: [{ title: exp.title || '', bullets: exp.bullets || [] }],
+  };
+}
+
+// jsPDF built-in helvetica does not have the ₹ glyph — substitute Rs.
+function sanitizeForPdf(text: string): string {
+  if (text.includes('₹')) console.log('[download-pdf] ₹ detected, substituting Rs.:', text.substring(0, 80));
+  return text.replace(/₹/g, 'Rs.');
+}
 
 // Hex color → [r, g, b]
 function hex(h: string): [number, number, number] {
@@ -331,7 +358,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
   if (cvData.summary?.trim()) {
     y = checkPage(doc, y, 12, p.margin);
     y = sectionHeader(doc, 'SUMMARY', y, p.margin, contentW);
-    y = renderMixedWrappedText(doc, cvData.summary, p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
+    y = renderMixedWrappedText(doc, sanitizeForPdf(cvData.summary), p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
     y += gap(3);
   }
 
@@ -340,32 +367,61 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
     y = checkPage(doc, y, 12, p.margin);
     y = sectionHeader(doc, 'EXPERIENCE', y, p.margin, contentW);
 
-    for (const exp of cvData.experience) {
+    for (const rawExp of cvData.experience) {
+      const exp = normalizeExp(rawExp);
       y = checkPage(doc, y, 10, p.margin);
 
+      // Company + optional location (left) + duration (right)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(p.bfs + 1.5);
       const [er, eg, eb] = hex('1A1A1A');
       doc.setTextColor(er, eg, eb);
-      doc.text(exp.company, p.margin, y);
-
+      const companyText = sanitizeForPdf(exp.company);
+      doc.text(companyText, p.margin, y);
+      if (exp.location?.trim()) {
+        const compW = doc.getTextWidth(companyText);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(p.bfs);
+        const [lr, lg, lb] = hex('888888');
+        doc.setTextColor(lr, lg, lb);
+        doc.text('  ·  ' + sanitizeForPdf(exp.location.trim()), p.margin + compW, y);
+      }
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(p.bfs);
       const [dr, dg, db] = hex('888888');
       doc.setTextColor(dr, dg, db);
-      doc.text(exp.duration, p.margin + contentW, y, { align: 'right' });
+      doc.text(sanitizeForPdf(exp.duration), p.margin + contentW, y, { align: 'right' });
       y += p.lh;
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(p.bfs + 0.5);
-      const [rr, rg, rb] = hex('444444');
-      doc.setTextColor(rr, rg, rb);
-      doc.text(exp.title, p.margin, y);
-      y += p.lh;
+      // Context paragraph
+      if (exp.context?.trim()) {
+        y = renderWrappedText(doc, sanitizeForPdf(exp.context.trim()), p.margin, y, contentW, p.bfs - 0.5, '444444', 'italic', p.lh);
+      }
 
-      for (const bullet of exp.bullets) {
-        y = checkPage(doc, y, 5, p.margin);
-        y = renderBullet(doc, bullet, p.margin, y, contentW, p.bfs, p.lh);
+      // Sub-roles
+      for (const sr of exp.sub_roles) {
+        if (sr.title?.trim()) {
+          y = checkPage(doc, y, 5, p.margin);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(p.bfs + 0.5);
+          const [rr, rg, rb] = hex('444444');
+          doc.setTextColor(rr, rg, rb);
+          doc.text(sanitizeForPdf(sr.title), p.margin, y);
+          y += p.lh;
+        }
+        if (sr.subtitle?.trim()) {
+          y = checkPage(doc, y, 5, p.margin);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(p.bfs);
+          const [sb1, sb2, sb3] = hex('1A1A1A');
+          doc.setTextColor(sb1, sb2, sb3);
+          doc.text(sanitizeForPdf(sr.subtitle.trim()), p.margin, y);
+          y += p.lh;
+        }
+        for (const bullet of sr.bullets) {
+          y = checkPage(doc, y, 5, p.margin);
+          y = renderBullet(doc, sanitizeForPdf(bullet), p.margin, y, contentW, p.bfs, p.lh);
+        }
       }
       y += gap(2);
     }
@@ -477,7 +533,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
 
       for (const bullet of proj.bullets) {
         y = checkPage(doc, y, 5, p.margin);
-        y = renderBullet(doc, bullet, p.margin, y, contentW, p.bfs, p.lh);
+        y = renderBullet(doc, sanitizeForPdf(bullet), p.margin, y, contentW, p.bfs, p.lh);
       }
       y += gap(2);
     }
@@ -489,7 +545,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
     y = sectionHeader(doc, 'CERTIFICATIONS', y, p.margin, contentW);
     for (const cert of cvData.certifications) {
       y = checkPage(doc, y, 5, p.margin);
-      y = renderMixedWrappedText(doc, cert, p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
+      y = renderMixedWrappedText(doc, sanitizeForPdf(cert), p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
     }
     y += gap(2);
   }
@@ -500,7 +556,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
     y = sectionHeader(doc, 'PUBLICATIONS', y, p.margin, contentW);
     for (const pub of cvData.publications) {
       y = checkPage(doc, y, 5, p.margin);
-      y = renderMixedWrappedText(doc, pub, p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
+      y = renderMixedWrappedText(doc, sanitizeForPdf(pub), p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
     }
     y += gap(2);
   }
@@ -509,7 +565,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
   if (cvData.interests?.length) {
     y = checkPage(doc, y, 12, p.margin);
     y = sectionHeader(doc, 'INTERESTS', y, p.margin, contentW);
-    y = renderWrappedText(doc, cvData.interests.join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
+    y = renderWrappedText(doc, sanitizeForPdf(cvData.interests.join('  •  ')), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
     y += gap(2);
   }
 
@@ -521,7 +577,7 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
       y = sectionHeader(doc, section.title.toUpperCase(), y, p.margin, contentW);
       for (const item of section.items) {
         y = checkPage(doc, y, 5, p.margin);
-        y = renderBullet(doc, item, p.margin, y, contentW, p.bfs, p.lh);
+        y = renderBullet(doc, sanitizeForPdf(item), p.margin, y, contentW, p.bfs, p.lh);
       }
       y += gap(2);
     }

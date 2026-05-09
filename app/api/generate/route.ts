@@ -40,9 +40,19 @@ export async function POST(request: NextRequest) {
       ? `\n\nAdditional information from user:\n${additionalInfo}`
       : '';
 
-    const jdContext = jobDescription
+    const hasJD = Boolean(jobDescription?.trim()) && jobDescription.trim().length >= 50;
+
+    const jdContext = hasJD
       ? `\n\nJob Description:\n${jobDescription}`
-      : '\n\nNo job description provided. Generate a strong, general-purpose CV highlighting the candidate\'s strongest experiences.';
+      : `\n\nNO JD PROVIDED — FORMATTING-ONLY MODE:
+- The user wants their CV improved, NOT tailored to a specific role.
+- PRESERVE ALL CONTENT. Do not drop any bullets, sub-roles, project descriptions, engagement headers, role context paragraphs, or details.
+- PRESERVE the original structure including sub-roles within a company (e.g., 3 different roles at the same employer should remain as 3 separate sub-sections, not flattened into one).
+- PRESERVE locations for each role.
+- PRESERVE summary lines like 'Total Work Experience — 9.5 yrs'.
+- Only improve: grammar, clarity, action verb strength, quantification, and ATS-friendly formatting.
+- If the original CV fits on one page, the output MUST also fill one page. Do not compress content.
+- When in doubt, KEEP the original text rather than rewriting or dropping it.`;
 
     let userPrompt = '';
 
@@ -85,7 +95,7 @@ In the "changes" array, list 3-5 specific improvements made (e.g., "Reordered bu
 
 Return ONLY valid JSON. No markdown, no explanation.`;
     } else {
-      userPrompt = `${jobDescription ? 'Tailor' : 'Create'} the following CV${jobDescription ? ' for the job description provided' : ' highlighting the candidate\'s strongest experiences'}. Apply all CV writing rules from your instructions.
+      userPrompt = `${hasJD ? 'Tailor' : 'Improve'} the following CV${hasJD ? ' for the job description provided' : ' — formatting and language only, preserve all content'}. Apply all CV writing rules from your instructions.
 
 ⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
 ${PRESERVATION_RULES}
@@ -133,8 +143,12 @@ Return ONLY the JSON object. No markdown, no explanation.`;
 
     // Check all sections
     if (cvData.experience) {
-      cvData.experience.forEach((exp: { bullets: string[]; company: string }, idx: number) => {
-        checkBullets(exp.bullets, `Experience[${idx}] ${exp.company}`);
+      cvData.experience.forEach((exp: { bullets?: string[]; sub_roles?: { bullets: string[] }[]; company: string }, idx: number) => {
+        if (exp.sub_roles?.length) {
+          exp.sub_roles.forEach((sr, si) => checkBullets(sr.bullets, `Experience[${idx}].sub_roles[${si}] ${exp.company}`));
+        } else if (exp.bullets) {
+          checkBullets(exp.bullets, `Experience[${idx}] ${exp.company}`);
+        }
       });
     }
     if (cvData.projects) {

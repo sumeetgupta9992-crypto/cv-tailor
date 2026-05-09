@@ -23,11 +23,21 @@ type Contact = {
   linkedin?: string;
 };
 
-type Experience = {
+type SubRole = {
   title: string;
+  subtitle?: string | null;
+  bullets: string[];
+};
+
+type Experience = {
   company: string;
   duration: string;
-  bullets: string[];
+  location?: string | null;
+  context?: string | null;
+  sub_roles?: SubRole[];
+  // legacy flat fields (backward compat with old localStorage data)
+  title?: string;
+  bullets?: string[];
 };
 
 type Education = {
@@ -113,6 +123,22 @@ function bulletParagraph(text: string): Paragraph {
 
 function safeHref(url: string): string {
   return url.startsWith("http") ? url : `https://${url}`;
+}
+
+function normalizeExp(exp: Experience): { company: string; duration: string; location?: string | null; context?: string | null; sub_roles: SubRole[] } {
+  if (exp.sub_roles?.length) return exp as any;
+  return {
+    company: exp.company,
+    duration: exp.duration,
+    location: exp.location,
+    context: exp.context,
+    sub_roles: [{ title: exp.title || '', bullets: exp.bullets || [] }],
+  };
+}
+
+function safeText(text: string): string {
+  if (text.includes('₹')) console.log('[download-word] ₹ detected in text:', text.substring(0, 80));
+  return text;
 }
 
 export async function POST(request: NextRequest) {
@@ -218,26 +244,50 @@ export async function POST(request: NextRequest) {
     if (cvData.experience?.length) {
       children.push(sectionHeader("EXPERIENCE"));
 
-      for (const exp of cvData.experience) {
-        children.push(
-          new Paragraph({
-            children: [
-              new TextRun({ text: exp.company + "  ", bold: true, size: 22, color: "1A1A1A" }),
-              new Tab(),
-              new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" }),
-            ],
-            tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
-            spacing: { before: 120, after: 0 },
-          })
-        );
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: exp.title, bold: true, size: 20, color: "444444" })],
-            spacing: { before: 0, after: 0 },
-          })
-        );
-        for (const bullet of exp.bullets) {
-          children.push(bulletParagraph(bullet));
+      for (const rawExp of cvData.experience) {
+        const exp = normalizeExp(rawExp);
+
+        // Company + Duration line
+        const companyLineChildren: any[] = [
+          new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" }),
+        ];
+        if (exp.location?.trim()) {
+          companyLineChildren.push(new TextRun({ text: "  ·  " + exp.location.trim(), size: 19, color: "888888" }));
+        }
+        companyLineChildren.push(new Tab());
+        companyLineChildren.push(new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" }));
+
+        children.push(new Paragraph({
+          children: companyLineChildren,
+          tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
+          spacing: { before: 120, after: 0 },
+        }));
+
+        // Context paragraph (italic, if present)
+        if (exp.context?.trim()) {
+          children.push(new Paragraph({
+            children: [new TextRun({ text: safeText(exp.context.trim()), size: 19, italics: true, color: "444444" })],
+            spacing: { before: 20, after: 0 },
+          }));
+        }
+
+        // Sub-roles
+        for (const sr of exp.sub_roles) {
+          if (sr.title?.trim()) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: sr.title, bold: true, size: 20, color: "444444" })],
+              spacing: { before: exp.sub_roles.length > 1 ? 60 : 0, after: 0 },
+            }));
+          }
+          if (sr.subtitle?.trim()) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: safeText(sr.subtitle.trim()), bold: true, size: 19, color: "1A1A1A" })],
+              spacing: { before: 20, after: 0 },
+            }));
+          }
+          for (const bullet of sr.bullets) {
+            children.push(bulletParagraph(safeText(bullet)));
+          }
         }
       }
     }

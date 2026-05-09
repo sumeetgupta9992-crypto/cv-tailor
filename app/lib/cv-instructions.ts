@@ -86,7 +86,7 @@ Work Experience
 • For freshers: focus on what you BUILT or DELIVERED, not what you learned.
 • Reverse chronological order. Most recent first.
 • Internships older than 5 years should be removed for experienced professionals.
-• If the user has held multiple roles at the same company, merge when in doubt.
+• If the user has held multiple roles at the same company, PRESERVE each as a separate sub_role — do NOT flatten or merge.
 
 Education
 • For freshers: education goes ABOVE work experience.
@@ -189,10 +189,17 @@ The JSON must follow this exact structure:
   },
   "experience": [
     {
-      "title": "job title",
       "company": "company name",
       "duration": "date range e.g. Jan 2020 – Present",
-      "bullets": ["bullet text with **bold metric** where applicable"]
+      "location": "city or country if found in CV, else omit field",
+      "context": "optional 1-2 line intro paragraph if original CV has one (e.g. '2 yrs cross-functional experience...'), else omit",
+      "sub_roles": [
+        {
+          "title": "job title",
+          "subtitle": "optional engagement header e.g. 'Key Engagements:' or named engagement name, else omit",
+          "bullets": ["bullet text with **bold metric** where applicable"]
+        }
+      ]
     }
   ],
   "education": [
@@ -246,4 +253,8 @@ Rules for the JSON output:
 - projects: always include "tech_stack" if the candidate listed technologies. Include "links" for any GitHub, demo, or live project links.
 - education: always include "gpa_or_percentage" and "details" if the candidate provided them.
 - Experience must be in reverse chronological order (most recent first).
+- experience.sub_roles: Use ONE sub_role entry for a simple single-role entry. Use MULTIPLE sub_role entries when the original CV shows multiple roles at the same company OR named engagements under one role. Never flatten multiple sub-roles into one — preserve all sub-roles exactly as structured in the original.
+- experience.location: Include if the original CV lists a location per role.
+- experience.context: Preserve any intro paragraph or context line under a company header verbatim. Only clean grammar/clarity.
+- experience.sub_roles[].subtitle: Use for engagement headers like "Key Engagements:" or named engagement titles that appear before a set of bullets in the original CV.
 - Education placement: above experience for freshers, below for experienced professionals (reflect this in the JSON array order when generating the document).`;
