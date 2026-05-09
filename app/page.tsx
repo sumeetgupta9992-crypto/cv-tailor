@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 
-const PRICE_INR = 99;
+const PRICE_INR = 19;
 const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
 const ADMIN_EMAILS = ['p14sumeetg@iima.ac.in', 'sumeetgupta9992@gmail.com'];
 
@@ -302,7 +302,7 @@ export default function Home() {
       const options = {
         key: razorpayKey,
         order_id: orderData.orderId,
-        amount: 9900, // paise — must match order; here for display only
+        amount: 1900, // paise — must match order; here for display only
         currency: 'INR',
         name: 'CV Tailor',
         description: 'CV generation + 3 refinements',
@@ -828,16 +828,24 @@ export default function Home() {
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between">
               <span className="text-slate-700 dark:text-slate-300 font-medium">Total Price</span>
-              <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">₹{PRICE_INR}</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg line-through text-slate-400 dark:text-slate-500">₹199</span>
+                <span className="text-3xl font-bold text-green-600 dark:text-green-400">₹{PRICE_INR}</span>
+              </div>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">UPI payment only · Secure checkout by Razorpay</p>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-sm text-slate-600 dark:text-slate-400">UPI payment only · Secure checkout by Razorpay</p>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+                90% OFF — Launch Offer
+              </span>
+            </div>
           </div>
 
-          <button 
+          <button
             onClick={handlePayment}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            Pay & Generate
+            Pay ₹{PRICE_INR} &amp; Generate
           </button>
 
           <button

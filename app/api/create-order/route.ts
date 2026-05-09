@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
 
     const order = await razorpay.orders.create({
-      amount: 9900, // ₹99 in paise
+      amount: 1900, // ₹19 in paise
       currency: 'INR',
       receipt: `cv-tailor-${Date.now()}`,
     });
