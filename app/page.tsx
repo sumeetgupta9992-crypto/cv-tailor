@@ -88,6 +88,11 @@ export default function Home() {
   const [refinementChanges, setRefinementChanges] = useState<string[]>([]);
   const [isPaid, setIsPaid] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
+  const [refineSuccess, setRefineSuccess] = useState(false);
+  const [isDownloadingWord, setIsDownloadingWord] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [wordDownloadDone, setWordDownloadDone] = useState(false);
+  const [pdfDownloadDone, setPdfDownloadDone] = useState(false);
   const [pendingCvContent, setPendingCvContent] = useState('');
   const [pendingMode, setPendingMode] = useState<'existing' | 'scratch' | null>(null);
   const [jdRequirements, setJdRequirements] = useState<JDRequirement[]>([]);
@@ -650,84 +655,86 @@ export default function Home() {
     }
   };
 
-  const downloadCV = async (cvData: CVData) => {
-    const safeName = cvData.name?.replace(/\s+/g, '-') || 'cv';
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // On iOS Safari, window.open must be called synchronously during the user
-    // gesture. Open placeholder tabs now; navigate them to blob URLs after fetch.
-    const wordWin = isMobile ? window.open('about:blank', '_blank') : null;
-    const pdfWin = isMobile ? window.open('about:blank', '_blank') : null;
-
-    await Promise.all([
-      // Download Word document
-      (async () => {
-        try {
-          const response = await fetch('/api/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cvData }),
-          });
-          if (!response.ok) throw new Error('Word download failed');
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          if (wordWin) {
-            wordWin.location.href = url;
-          } else {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${safeName}-tailored.docx`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-          }
-        } catch (error) {
-          wordWin?.close();
-          console.error('Word download error:', error);
-          alert('Failed to download Word document');
-        }
-      })(),
-      // Download PDF document
-      (async () => {
-        try {
-          const response = await fetch('/api/download-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cvData }),
-          });
-          if (!response.ok) throw new Error('PDF download failed');
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          if (pdfWin) {
-            pdfWin.location.href = url;
-          } else {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${safeName}-tailored.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-          }
-        } catch (error) {
-          pdfWin?.close();
-          console.error('PDF download error:', error);
-          alert('Failed to download PDF document');
-        }
-      })(),
-    ]);
+  const triggerFeedbackCard = () => {
+    if (!feedbackSubmitted && !showFeedbackCard) {
+      setTimeout(() => setShowFeedbackCard(true), 8000);
+    }
   };
 
-  const handleDownload = async () => {
-    if (!cvJson) return;
+  const handleDownloadWord = async () => {
+    if (!cvJson || isDownloadingWord) return;
+    const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // Must open synchronously before any await (iOS Safari user gesture requirement)
+    const win = isMobile ? window.open('about:blank', '_blank') : null;
+    setIsDownloadingWord(true);
     try {
-      await downloadCV(cvJson);
-      if (!feedbackSubmitted && !showFeedbackCard) {
-        setTimeout(() => setShowFeedbackCard(true), 8000);
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvData: cvJson }),
+      });
+      if (!response.ok) throw new Error('Word download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      if (win) {
+        win.location.href = url;
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}-tailored.docx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
       }
-    } catch {
-      alert('Error downloading file');
+      setWordDownloadDone(true);
+      setTimeout(() => setWordDownloadDone(false), 3000);
+      triggerFeedbackCard();
+    } catch (error) {
+      win?.close();
+      console.error('Word download error:', error);
+      alert('Failed to download Word document');
+    } finally {
+      setIsDownloadingWord(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!cvJson || isDownloadingPdf) return;
+    const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const win = isMobile ? window.open('about:blank', '_blank') : null;
+    setIsDownloadingPdf(true);
+    try {
+      const response = await fetch('/api/download-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvData: cvJson }),
+      });
+      if (!response.ok) throw new Error('PDF download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      if (win) {
+        win.location.href = url;
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}-tailored.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+      }
+      setPdfDownloadDone(true);
+      setTimeout(() => setPdfDownloadDone(false), 3000);
+      triggerFeedbackCard();
+    } catch (error) {
+      win?.close();
+      console.error('PDF download error:', error);
+      alert('Failed to download PDF document');
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -826,7 +833,8 @@ export default function Home() {
         }
 
         saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: newCount, refinementChanges: data.changes || [] });
-        await downloadCV(data.cvData);
+        setRefineSuccess(true);
+        setTimeout(() => setRefineSuccess(false), 3000);
       } else {
         alert(data.error || 'Error refining CV');
       }
@@ -1522,12 +1530,35 @@ export default function Home() {
 
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV has been downloaded</h1>
-            <button onClick={handleDownload} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
-              <Download className="w-5 h-5" />
-              Download CV
-            </button>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Downloads as Word + PDF</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV is ready</h1>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleDownloadWord}
+                disabled={isDownloadingWord}
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {isDownloadingWord ? (
+                  <><Loader className="w-5 h-5 animate-spin" /> Downloading…</>
+                ) : wordDownloadDone ? (
+                  <><CheckCircle className="w-5 h-5" /> Downloaded!</>
+                ) : (
+                  <><Download className="w-5 h-5" /> Download Word</>
+                )}
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {isDownloadingPdf ? (
+                  <><Loader className="w-5 h-5 animate-spin" /> Downloading…</>
+                ) : pdfDownloadDone ? (
+                  <><CheckCircle className="w-5 h-5" /> Downloaded!</>
+                ) : (
+                  <><Download className="w-5 h-5" /> Download PDF</>
+                )}
+              </button>
+            </div>
 
             {showFeedbackCard && (
               <div className="mt-5 feedback-slide-in">
@@ -1608,6 +1639,8 @@ export default function Home() {
             >
               {isRefining ? (
                 <><Loader className="w-5 h-5 animate-spin" /> Refining…</>
+              ) : refineSuccess ? (
+                <><CheckCircle className="w-5 h-5" /> CV Updated — download the new version above</>
               ) : refinementCount >= 3 ? (
                 'All refinements used'
               ) : (
