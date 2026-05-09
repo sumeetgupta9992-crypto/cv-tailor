@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { convertHTML } from 'html-pdf-node';
+import chromium from '@sparticuz/chromium';
+import puppeteerCore from 'puppeteer-core';
 
 type Contact = {
   email?: string;
@@ -318,15 +319,22 @@ export async function POST(request: NextRequest) {
 </body>
 </html>`;
 
-    // Convert HTML to PDF
-    const options = {
+    // Convert HTML to PDF using puppeteer-core + @sparticuz/chromium (Vercel-compatible)
+    const browser = await puppeteerCore.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfUint8 = await page.pdf({
       format: 'A4',
       margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
       printBackground: true,
-    };
-
-    const file = { content: html };
-    const pdfBuffer = await convertHTML(options, file);
+    });
+    await browser.close();
+    const pdfBuffer = Buffer.from(pdfUint8);
 
     const safeName = cvData.name
       .replace(/[^a-zA-Z0-9\s-]/g, '')

@@ -10,11 +10,12 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@sparticuz/chromium": "^148.0.0",
     "@supabase/supabase-js": "^2.105.3",
     "docx": "^9.6.1",
-    "html-pdf-node": "^1.0.8",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
+    "puppeteer-core": "^24.43.0",
     "razorpay": "^2.9.6",
     "react": "19.2.4",
     "react-dom": "19.2.4"

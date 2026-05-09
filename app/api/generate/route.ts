@@ -115,12 +115,12 @@ Return ONLY the JSON object. No markdown, no explanation.`;
 
     // Check all sections
     if (cvData.experience) {
-      cvData.experience.forEach((exp, idx) => {
+      cvData.experience.forEach((exp: { bullets: string[]; company: string }, idx: number) => {
         checkBullets(exp.bullets, `Experience[${idx}] ${exp.company}`);
       });
     }
     if (cvData.projects) {
-      cvData.projects.forEach((proj, idx) => {
+      cvData.projects.forEach((proj: { bullets: string[]; name: string }, idx: number) => {
         checkBullets(proj.bullets, `Projects[${idx}] ${proj.name}`);
       });
     }
