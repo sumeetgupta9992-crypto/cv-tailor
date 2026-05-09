@@ -4,6 +4,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  Tab,
   ExternalHyperlink,
   AlignmentType,
   BorderStyle,
@@ -207,8 +208,8 @@ export async function POST(request: NextRequest) {
         children.push(
           new Paragraph({
             children: [
-              new TextRun({ text: exp.company, bold: true, size: 22, color: "1A1A1A" }),
-              new TextRun({ text: "\t", size: 22 }),
+              new TextRun({ text: exp.company + "  ", bold: true, size: 22, color: "1A1A1A" }),
+              new Tab(),
               new TextRun({ text: exp.duration, italics: true, size: 19, color: "888888" }),
             ],
             tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
@@ -243,8 +244,8 @@ export async function POST(request: NextRequest) {
           new Paragraph({
             children: [
               new TextRun({ text: edu.institution, bold: true, size: 19, color: "1A1A1A" }),
-              new TextRun({ text: "  —  " + edu.degree, size: 19, color: "1A1A1A" }),
-              new TextRun({ text: "\t", size: 19 }),
+              new TextRun({ text: "  —  " + edu.degree + "  ", size: 19, color: "1A1A1A" }),
+              new Tab(),
               new TextRun({ text: edu.year, italics: true, size: 19, color: "888888" }),
             ],
             tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
