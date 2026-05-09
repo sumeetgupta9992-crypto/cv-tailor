@@ -33,3 +33,11 @@ body {
 .cv-fade-in {
   animation: cvFadeIn 0.25s ease-out both;
 }
+
+@keyframes feedbackSlideIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.feedback-slide-in {
+  animation: feedbackSlideIn 0.35s ease-out both;
+}

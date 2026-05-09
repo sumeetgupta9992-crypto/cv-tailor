@@ -104,11 +104,17 @@ export default function Home() {
   const [detectedName, setDetectedName] = useState('');
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [showJdNudge, setShowJdNudge] = useState(false);
+  const [showFeedbackCard, setShowFeedbackCard] = useState(false);
+  const [feedbackPhase, setFeedbackPhase] = useState<'rating' | 'text' | 'thanks'>('rating');
+  const [feedbackRating, setFeedbackRating] = useState<'positive' | 'negative' | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
   const refinementTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const feedbackAutoSubmitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const HINT_CATEGORIES = [
     {
@@ -257,6 +263,11 @@ export default function Home() {
     setAnalysisReady(false);
     setDetectedName('');
     setShowTailorAnotherModal(false);
+    setShowFeedbackCard(false);
+    setFeedbackPhase('rating');
+    setFeedbackRating(null);
+    setFeedbackText('');
+    setFeedbackSubmitted(false);
     setAppMode('mode-selection');
   };
 
@@ -697,9 +708,47 @@ export default function Home() {
     if (!cvJson) return;
     try {
       await downloadCV(cvJson);
+      if (!feedbackSubmitted && !showFeedbackCard) {
+        setTimeout(() => setShowFeedbackCard(true), 8000);
+      }
     } catch {
       alert('Error downloading file');
     }
+  };
+
+  const submitFeedback = async (rating: 'positive' | 'negative', text: string) => {
+    if (feedbackSubmitted) return;
+    setFeedbackSubmitted(true);
+    setFeedbackPhase('thanks');
+    setTimeout(() => setShowFeedbackCard(false), 2500);
+    if (supabaseRowId) {
+      try {
+        const { error } = await supabase
+          .from('cv_generations')
+          .update({ feedback_rating: rating, feedback_text: text.trim() || null })
+          .eq('id', supabaseRowId);
+        if (error) console.error('[feedback] Supabase error:', error);
+        else console.log('[feedback] ✅ saved rating:', rating, text ? `| text: "${text}"` : '| no text');
+      } catch (e) {
+        console.error('[feedback] exception:', e);
+      }
+    }
+  };
+
+  const handleFeedbackRating = (rating: 'positive' | 'negative') => {
+    setFeedbackRating(rating);
+    setFeedbackPhase('text');
+    feedbackAutoSubmitRef.current = setTimeout(() => {
+      submitFeedback(rating, '');
+    }, 5000);
+  };
+
+  const handleFeedbackSubmit = () => {
+    if (feedbackAutoSubmitRef.current) {
+      clearTimeout(feedbackAutoSubmitRef.current);
+      feedbackAutoSubmitRef.current = null;
+    }
+    submitFeedback(feedbackRating!, feedbackText);
   };
 
   const handleRefine = async () => {
@@ -749,12 +798,15 @@ export default function Home() {
         // Update Supabase row — non-blocking
         if (supabaseRowId) {
           try {
-            await supabase
+            console.log('[refine] Updating row', supabaseRowId, '— refinement_count:', newCount);
+            const { error } = await supabase
               .from('cv_generations')
               .update({ cv_content: data.cvData, refinement_count: newCount })
               .eq('id', supabaseRowId);
+            if (error) console.error('[refine] Supabase update error:', error);
+            else console.log('[refine] ✅ refinement_count updated to', newCount);
           } catch (e) {
-            console.error('Supabase update error:', e);
+            console.error('[refine] Supabase exception:', e);
           }
         }
 
@@ -1395,6 +1447,73 @@ export default function Home() {
               Download CV
             </button>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Downloads as Word + PDF</p>
+
+            {showFeedbackCard && (
+              <div className="mt-5 feedback-slide-in">
+                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                  {feedbackPhase === 'rating' && (
+                    <>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">How&apos;s the CV?</p>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleFeedbackRating('positive')}
+                          className="flex-1 text-3xl py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
+                        >
+                          👍
+                        </button>
+                        <button
+                          onClick={() => handleFeedbackRating('negative')}
+                          className="flex-1 text-3xl py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                        >
+                          👎
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {feedbackPhase === 'text' && (
+                    <div className="cv-fade-in">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
+                        {feedbackRating === 'positive' ? '👍 Glad to hear it!' : '👎 Sorry it missed the mark.'}
+                      </p>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={feedbackText}
+                        onChange={(e) => {
+                          if (feedbackAutoSubmitRef.current) {
+                            clearTimeout(feedbackAutoSubmitRef.current);
+                            feedbackAutoSubmitRef.current = null;
+                          }
+                          setFeedbackText(e.target.value);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleFeedbackSubmit(); }}
+                        placeholder="Any quick feedback? (optional)"
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={handleFeedbackSubmit}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+                        >
+                          Submit
+                        </button>
+                        <button
+                          onClick={() => submitFeedback(feedbackRating!, '')}
+                          className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-sm font-semibold py-2 rounded-lg transition-colors"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {feedbackPhase === 'thanks' && (
+                    <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-1 cv-fade-in">Thanks for the feedback! 🙏</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
