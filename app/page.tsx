@@ -606,20 +606,57 @@ export default function Home() {
   };
 
   const downloadCV = async (cvData: CVData) => {
-    const response = await fetch('/api/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cvData }),
-    });
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${cvData.name?.replace(/\s+/g, '-') || 'cv'}-tailored.docx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
+    const safeName = cvData.name?.replace(/\s+/g, '-') || 'cv';
+
+    // Download both Word and PDF simultaneously with individual error handling
+    await Promise.all([
+      // Download Word document
+      (async () => {
+        try {
+          const response = await fetch('/api/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cvData }),
+          });
+          if (!response.ok) throw new Error('Word download failed');
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${safeName}-tailored.docx`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('Word download error:', error);
+          alert('Failed to download Word document');
+        }
+      })(),
+      // Download PDF document
+      (async () => {
+        try {
+          const response = await fetch('/api/download-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cvData }),
+          });
+          if (!response.ok) throw new Error('PDF download failed');
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${safeName}-tailored.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('PDF download error:', error);
+          alert('Failed to download PDF document');
+        }
+      })(),
+    ]);
   };
 
   const handleDownload = async () => {
