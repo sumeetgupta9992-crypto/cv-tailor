@@ -825,45 +825,39 @@ export default function Home() {
   if (appMode === 'mode-selection') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <main className="max-w-xl mx-auto px-4 py-12 sm:px-6 flex flex-col items-center gap-6 text-center">
+        <main className="max-w-xl mx-auto px-4 py-4 md:py-12 sm:px-6 flex flex-col items-center gap-3 md:gap-6 text-center">
 
-          {/* 1. Quote block */}
-          <div className="w-full rounded-2xl p-5 text-left" style={{ backgroundColor: '#E1F5EE' }}>
-            <p className="text-sm leading-relaxed mb-3 italic" style={{ color: '#1a4a3a' }}>
+          {/* 1. Quote block — compact on mobile */}
+          <div className="w-full rounded-2xl p-3 md:p-5 text-left" style={{ backgroundColor: '#E1F5EE' }}>
+            <p className="text-xs md:text-sm leading-relaxed mb-2 md:mb-3 italic" style={{ color: '#1a4a3a' }}>
               &ldquo;My first CV took 3 months. I nagged every senior I knew. Rewrote it 5 times. Still wasn&apos;t sure it was right.&rdquo;
             </p>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#0F6E56' }}>V</div>
+              <div className="w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#0F6E56' }}>V</div>
               <span className="text-xs text-slate-600">Vaibhav, Final Year Student</span>
             </div>
           </div>
 
           {/* 2. Founder line */}
-          <p className="text-base font-medium text-slate-700 dark:text-slate-300">
+          <p className="text-sm md:text-base font-medium text-slate-700 dark:text-slate-300">
             So I built the tool I wish I had.
           </p>
 
-          {/* 3. Alumnus badge */}
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56', borderColor: '#0F6E56' }}>
-            <Award className="w-3.5 h-3.5" />
-            IIM Ahmedabad · BITS Pilani · alumnus
-          </span>
-
           {/* 4. H1 */}
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white leading-tight">
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white leading-tight">
               Every job deserves a different CV.
             </h1>
-            <h2 className="text-3xl sm:text-4xl font-bold leading-tight mt-1" style={{ color: '#0F6E56' }}>
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mt-1" style={{ color: '#0F6E56' }}>
               Your ATS-ready CV is 5 minutes away.
             </h2>
           </div>
 
-          {/* 5. Steps row */}
-          <div className="flex items-center gap-1 flex-wrap justify-center">
+          {/* 5. Steps row — flat, non-interactive; hidden on mobile */}
+          <div className="hidden md:flex items-center gap-1 flex-wrap justify-center">
             {(['Upload CV', 'Paste JD', 'Get tailored CV'] as const).map((step, i) => (
               <span key={step} className="flex items-center gap-1">
-                <span className="px-3 py-1.5 rounded-full text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-sm">
+                <span className="px-3 py-1.5 rounded text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 select-none cursor-default">
                   {step}
                 </span>
                 {i < 2 && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#0F6E56' }} />}
@@ -871,9 +865,9 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 6. Scratch note */}
-          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
-            No CV yet? Start from scratch — we&apos;ll guide you.
+          {/* 6. Scratch note — prominent teal, visible on all screens */}
+          <p className="text-sm font-medium" style={{ color: '#0F6E56' }}>
+            ✨ No CV yet? Start from scratch — we&apos;ll guide you.
           </p>
 
           {/* 7. Price pill */}
@@ -883,35 +877,41 @@ export default function Home() {
             ₹19 only
           </span>
 
-          {/* 8. CTA buttons */}
-          <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 3. Alumnus badge — moved here, subtle trust signal */}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56', borderColor: '#0F6E56' }}>
+            <Award className="w-3 h-3" />
+            By an IIM Ahmedabad alumnus
+          </span>
+
+          {/* 8. CTA buttons — compact padding on mobile */}
+          <div className="w-full grid grid-cols-2 gap-3 md:gap-4">
             <button
               onClick={() => setAppMode('existing-cv')}
-              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
+              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-4 md:p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
             >
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight className="w-5 h-5" style={{ color: '#0F6E56' }} />
+                <ChevronRight className="w-4 h-4" style={{ color: '#0F6E56' }} />
               </div>
-              <FileText className="w-10 h-10 mb-3" style={{ color: '#0F6E56' }} />
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">I Have a CV</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Tailor it for a role</p>
+              <FileText className="w-8 h-8 md:w-10 md:h-10 mb-2 md:mb-3" style={{ color: '#0F6E56' }} />
+              <h2 className="text-sm md:text-lg font-bold text-slate-900 dark:text-white mb-0.5">I Have a CV</h2>
+              <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">Tailor it for a role</p>
             </button>
 
             <button
               onClick={() => { setAppMode('interview'); setInterviewIndex(0); setInterviewAnswers(Array(INTERVIEW_QUESTIONS.length).fill('')); setCurrentAnswer(''); }}
-              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
+              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-4 md:p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
             >
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight className="w-5 h-5 text-purple-600" />
+                <ChevronRight className="w-4 h-4 text-purple-600" />
               </div>
-              <Plus className="w-10 h-10 text-purple-600 mb-3" />
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Start from Scratch</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Guided step by step</p>
+              <Plus className="w-8 h-8 md:w-10 md:h-10 text-purple-600 mb-2 md:mb-3" />
+              <h2 className="text-sm md:text-lg font-bold text-slate-900 dark:text-white mb-0.5">Start from Scratch</h2>
+              <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">Guided step by step</p>
             </button>
           </div>
 
           {/* 9. Trust row */}
-          <div className="flex items-center gap-4 flex-wrap justify-center pb-8">
+          <div className="flex items-center gap-3 md:gap-4 flex-wrap justify-center pb-4 md:pb-8">
             {['ATS-friendly', 'Word doc download', '3 refinements included'].map((item) => (
               <span key={item} className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                 <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#0F6E56' }} />
