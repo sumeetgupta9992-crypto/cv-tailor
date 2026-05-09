@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle } from 'lucide-react';
+import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle, Award } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 
 const PRICE_INR = 19;
@@ -825,40 +825,101 @@ export default function Home() {
   if (appMode === 'mode-selection') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-          <div className="max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-3">
-              One CV won&apos;t get you every job
+        <main className="max-w-xl mx-auto px-4 py-12 sm:px-6 flex flex-col items-center gap-6 text-center">
+
+          {/* 1. Quote block */}
+          <div className="w-full rounded-2xl p-5 text-left" style={{ backgroundColor: '#E1F5EE' }}>
+            <p className="text-sm leading-relaxed mb-3 italic" style={{ color: '#1a4a3a' }}>
+              &ldquo;My first CV took 3 months. I nagged every senior I knew. Rewrote it 5 times. Still wasn&apos;t sure it was right.&rdquo;
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#0F6E56' }}>V</div>
+              <span className="text-xs text-slate-600">Vaibhav, Final Year Student</span>
+            </div>
+          </div>
+
+          {/* 2. Founder line */}
+          <p className="text-base font-medium text-slate-700 dark:text-slate-300">
+            So I built the tool I wish I had.
+          </p>
+
+          {/* 3. Alumnus badge */}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56', borderColor: '#0F6E56' }}>
+            <Award className="w-3.5 h-3.5" />
+            IIM Ahmedabad · BITS Pilani · alumnus
+          </span>
+
+          {/* 4. H1 */}
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white leading-tight">
+              Every job deserves a different CV.
             </h1>
-            <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mb-2">
-              Fancy designs don&apos;t get you shortlisted. ATS software rejects 90% of CVs before a recruiter sees them.
-            </p>
-            <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl">
-              Each job description is different. Your CV should be too. AI-tailored in 2 minutes — matched to the role, not just your experience.
-            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold leading-tight mt-1" style={{ color: '#0F6E56' }}>
+              Your ATS-ready CV is 5 minutes away.
+            </h2>
           </div>
-        </section>
 
-        <main className="max-w-2xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <button onClick={() => setAppMode('existing-cv')} className="group relative bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 hover:shadow-xl transition-all">
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight className="w-6 h-6 text-blue-600" />
+          {/* 5. Steps row */}
+          <div className="flex items-center gap-1 flex-wrap justify-center">
+            {(['Upload CV', 'Paste JD', 'Get tailored CV'] as const).map((step, i) => (
+              <span key={step} className="flex items-center gap-1">
+                <span className="px-3 py-1.5 rounded-full text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-sm">
+                  {step}
+                </span>
+                {i < 2 && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#0F6E56' }} />}
+              </span>
+            ))}
+          </div>
+
+          {/* 6. Scratch note */}
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+            No CV yet? Start from scratch — we&apos;ll guide you.
+          </p>
+
+          {/* 7. Price pill */}
+          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56' }}>
+            🚀 Launch offer
+            <span className="line-through font-normal" style={{ color: '#888' }}>₹199</span>
+            ₹19 only
+          </span>
+
+          {/* 8. CTA buttons */}
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => setAppMode('existing-cv')}
+              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
+            >
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-5 h-5" style={{ color: '#0F6E56' }} />
               </div>
-              <FileText className="w-12 h-12 text-blue-600 mb-4" />
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">I Have a CV</h2>
-              <p className="text-slate-600 dark:text-slate-300">Tailor it for a role</p>
+              <FileText className="w-10 h-10 mb-3" style={{ color: '#0F6E56' }} />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">I Have a CV</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Tailor it for a role</p>
             </button>
 
-            <button onClick={() => { setAppMode('interview'); setInterviewIndex(0); setInterviewAnswers(Array(INTERVIEW_QUESTIONS.length).fill('')); setCurrentAnswer(''); }} className="group relative bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8 hover:shadow-xl transition-all">
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight className="w-6 h-6 text-purple-600" />
+            <button
+              onClick={() => { setAppMode('interview'); setInterviewIndex(0); setInterviewAnswers(Array(INTERVIEW_QUESTIONS.length).fill('')); setCurrentAnswer(''); }}
+              className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
+            >
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-5 h-5 text-purple-600" />
               </div>
-              <Plus className="w-12 h-12 text-purple-600 mb-4" />
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Create from Scratch</h2>
-              <p className="text-slate-600 dark:text-slate-300">Guided step by step</p>
+              <Plus className="w-10 h-10 text-purple-600 mb-3" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Start from Scratch</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Guided step by step</p>
             </button>
           </div>
+
+          {/* 9. Trust row */}
+          <div className="flex items-center gap-4 flex-wrap justify-center pb-8">
+            {['ATS-friendly', 'Word doc download', '3 refinements included'].map((item) => (
+              <span key={item} className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#0F6E56' }} />
+                {item}
+              </span>
+            ))}
+          </div>
+
         </main>
       </div>
     );
