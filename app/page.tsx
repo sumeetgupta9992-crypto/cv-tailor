@@ -661,12 +661,26 @@ export default function Home() {
     }
   };
 
+  // iOS Safari blocks a.click() in async callbacks (user gesture is gone by then).
+  // Android Chrome does not have this restriction — a.click() downloads normally.
+  // So only iOS gets the window.open workaround; Android uses the standard path.
+  const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const triggerAnchorDownload = (url: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+  };
+
   const handleDownloadWord = async () => {
     if (!cvJson || isDownloadingWord) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    // Must open synchronously before any await (iOS Safari user gesture requirement)
-    const win = isMobile ? window.open('about:blank', '_blank') : null;
+    // Open blank window synchronously (before any await) so iOS preserves the gesture
+    const win = isIos() ? window.open('about:blank', '_blank') : null;
     setIsDownloadingWord(true);
     try {
       const response = await fetch('/api/download', {
@@ -680,13 +694,7 @@ export default function Home() {
       if (win) {
         win.location.href = url;
       } else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}-tailored.docx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+        triggerAnchorDownload(url, `${safeName}-tailored.docx`);
       }
       setWordDownloadDone(true);
       setTimeout(() => setWordDownloadDone(false), 3000);
@@ -703,8 +711,7 @@ export default function Home() {
   const handleDownloadPdf = async () => {
     if (!cvJson || isDownloadingPdf) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const win = isMobile ? window.open('about:blank', '_blank') : null;
+    const win = isIos() ? window.open('about:blank', '_blank') : null;
     setIsDownloadingPdf(true);
     try {
       const response = await fetch('/api/download-pdf', {
@@ -718,13 +725,7 @@ export default function Home() {
       if (win) {
         win.location.href = url;
       } else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}-tailored.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+        triggerAnchorDownload(url, `${safeName}-tailored.pdf`);
       }
       setPdfDownloadDone(true);
       setTimeout(() => setPdfDownloadDone(false), 3000);
