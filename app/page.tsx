@@ -982,8 +982,8 @@ export default function Home() {
               <p className="text-sm text-amber-800 dark:text-amber-200">DEV MODE — Payment skipped</p>
             </div>
           )}
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Generate Your CV</h2>
-          <p className="text-slate-600 dark:text-slate-300 mb-6">One-time payment for CV generation + 3 refinements included</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pay through UPI → Return to this tab → Download your CV</h2>
+          <p className="text-slate-600 dark:text-slate-300 mb-6">3 refinements included</p>
           
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between">
