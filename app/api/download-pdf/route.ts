@@ -26,6 +26,11 @@ type Project = {
   bullets: string[];
 };
 
+type AdditionalSection = {
+  title: string;
+  items: string[];
+};
+
 type CVData = {
   name: string;
   tagline?: string;
@@ -38,6 +43,7 @@ type CVData = {
   certifications?: string[];
   publications?: string[];
   interests?: string[];
+  additional_sections?: AdditionalSection[];
 };
 
 // A4 page dimensions (mm)
@@ -411,7 +417,22 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
   if (cvData.interests?.length) {
     y = checkPage(doc, y, 12, p.margin);
     y = sectionHeader(doc, 'INTERESTS', y, p.margin, contentW);
-    renderWrappedText(doc, cvData.interests.join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
+    y = renderWrappedText(doc, cvData.interests.join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
+    y += gap(2);
+  }
+
+  // ── Additional sections (Achievements, Positions of Responsibility, etc.)
+  if (cvData.additional_sections?.length) {
+    for (const section of cvData.additional_sections) {
+      if (!section.title || !section.items?.length) continue;
+      y = checkPage(doc, y, 12, p.margin);
+      y = sectionHeader(doc, section.title.toUpperCase(), y, p.margin, contentW);
+      for (const item of section.items) {
+        y = checkPage(doc, y, 5, p.margin);
+        y = renderBullet(doc, item, p.margin, y, contentW, p.bfs, p.lh);
+      }
+      y += gap(2);
+    }
   }
 
   return doc;

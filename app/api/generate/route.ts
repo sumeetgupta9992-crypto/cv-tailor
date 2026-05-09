@@ -98,6 +98,8 @@ Return ONLY the JSON object. No markdown, no explanation.`;
     const cvData = parsed.cvData || parsed;
     const changes = parsed.changes || null;
 
+    console.log('[generate] Full cvData:', JSON.stringify(cvData, null, 2));
+
     // Post-processing: validate bullet point character limits
     const bulletValidationWarnings: string[] = [];
     const checkBullets = (bullets: string[], section: string) => {

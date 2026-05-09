@@ -36,6 +36,11 @@ type Project = {
   bullets: string[];
 };
 
+type AdditionalSection = {
+  title: string;
+  items: string[];
+};
+
 type CVData = {
   name: string;
   tagline?: string;
@@ -48,6 +53,7 @@ type CVData = {
   certifications?: string[];
   publications?: string[];
   interests?: string[];
+  additional_sections?: AdditionalSection[];
 };
 
 // Split "**bold**" markers into TextRun arrays
@@ -323,6 +329,17 @@ export async function POST(request: NextRequest) {
           spacing: { before: 40, after: 0 },
         })
       );
+    }
+
+    // ── Additional sections (Achievements, Positions of Responsibility, etc.)
+    if (cvData.additional_sections?.length) {
+      for (const section of cvData.additional_sections) {
+        if (!section.title || !section.items?.length) continue;
+        children.push(sectionHeader(section.title.toUpperCase()));
+        for (const item of section.items) {
+          children.push(bulletParagraph(item));
+        }
+      }
     }
 
     // ── Assemble document ─────────────────────────────────────────────────

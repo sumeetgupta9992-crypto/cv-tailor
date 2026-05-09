@@ -189,10 +189,18 @@ The JSON must follow this exact structure:
   ],
   "certifications": ["Certification Name — Issuing Body, Year"],
   "publications": ["Author(s). Title. Venue/Journal, Year."],
-  "interests": ["interest 1", "interest 2"]
+  "interests": ["interest 1", "interest 2"],
+  "additional_sections": [
+    {
+      "title": "Section Title e.g. Achievements, Positions of Responsibility, Volunteer Experience",
+      "items": ["item text with **bold metric** where applicable"]
+    }
+  ]
 }
 
-Omit any top-level key entirely if the candidate's CV contains no content for that section. Do NOT output an empty array — omit the field. Only include projects, certifications, publications, and interests if the candidate explicitly provided them.
+Omit any top-level key entirely if the candidate's CV contains no content for that section. Do NOT output an empty array — omit the field. Only include projects, certifications, publications, interests, and additional_sections if the candidate explicitly provided them.
+
+CRITICAL — additional_sections: Any section in the candidate's CV that does not map to experience, education, skills, projects, certifications, publications, or interests MUST be placed in additional_sections. This includes (but is not limited to): Achievements, Positions of Responsibility, Leadership, Volunteer Experience, Awards, Extracurriculars, Community Service, Open Source, Research, Teaching Experience, or any custom section the candidate named. Never drop these sections — always carry them through into additional_sections. Each additional section has a "title" (the section heading) and an "items" array (bullet-style entries, with **bold metric** where applicable).
 
 Rules for the JSON output:
 - tagline: MUST follow the format "[Title] | [Domain1] · [Domain2] · [Domain3]" — exactly 3 domain tags separated by ·. Domains describe the TYPE of problems solved, not the industry.
