@@ -54,7 +54,7 @@ console.log('✅ public/favicon.ico');
 // ── OG image — resize icon to 1200×630 ───────────────────────────────────────
 console.log('Generating public/og-image.png…');
 await sharp(join(publicDir, 'icon.png'))
-  .resize(1200, 630, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+  .resize(1200, 630, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
   .png()
   .toFile(join(publicDir, 'og-image.png'));
 console.log('✅ public/og-image.png (1200×630)');
