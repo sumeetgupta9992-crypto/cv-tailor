@@ -652,8 +652,13 @@ export default function Home() {
 
   const downloadCV = async (cvData: CVData) => {
     const safeName = cvData.name?.replace(/\s+/g, '-') || 'cv';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-    // Download both Word and PDF simultaneously with individual error handling
+    // On iOS Safari, window.open must be called synchronously during the user
+    // gesture. Open placeholder tabs now; navigate them to blob URLs after fetch.
+    const wordWin = isMobile ? window.open('about:blank', '_blank') : null;
+    const pdfWin = isMobile ? window.open('about:blank', '_blank') : null;
+
     await Promise.all([
       // Download Word document
       (async () => {
@@ -666,14 +671,19 @@ export default function Home() {
           if (!response.ok) throw new Error('Word download failed');
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${safeName}-tailored.docx`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
+          if (wordWin) {
+            wordWin.location.href = url;
+          } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${safeName}-tailored.docx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+          }
         } catch (error) {
+          wordWin?.close();
           console.error('Word download error:', error);
           alert('Failed to download Word document');
         }
@@ -689,14 +699,19 @@ export default function Home() {
           if (!response.ok) throw new Error('PDF download failed');
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${safeName}-tailored.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
+          if (pdfWin) {
+            pdfWin.location.href = url;
+          } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${safeName}-tailored.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+          }
         } catch (error) {
+          pdfWin?.close();
           console.error('PDF download error:', error);
           alert('Failed to download PDF document');
         }
