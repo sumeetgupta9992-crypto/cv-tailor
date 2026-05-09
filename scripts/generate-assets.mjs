@@ -31,13 +31,17 @@ const iconSvg = `
 </svg>
 `.trim();
 
-// ── Generate icon.png ─────────────────────────────────────────────────────────
-console.log('Generating public/icon.png…');
-await sharp(Buffer.from(iconSvg))
-  .resize(512, 512)
-  .png()
-  .toFile(join(publicDir, 'icon.png'));
-console.log('✅ public/icon.png');
+// ── Generate icon.png (only if not already present) ──────────────────────────
+if (!existsSync(join(publicDir, 'icon.png'))) {
+  console.log('Generating public/icon.png (placeholder)…');
+  await sharp(Buffer.from(iconSvg))
+    .resize(512, 512)
+    .png()
+    .toFile(join(publicDir, 'icon.png'));
+  console.log('✅ public/icon.png (placeholder)');
+} else {
+  console.log('ℹ️  public/icon.png already exists — skipping (using existing logo)');
+}
 
 // ── Generate favicon.ico (32×32 PNG served as ico) ───────────────────────────
 console.log('Generating public/favicon.ico…');
