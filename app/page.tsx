@@ -189,6 +189,24 @@ export default function Home() {
     if (appMode === 'success') setShowTailorAnotherModal(false);
   }, [appMode]);
 
+  // Push a history entry when entering analyzing/analysis so browser Back doesn't exit the app
+  useEffect(() => {
+    if (appMode === 'analyzing') {
+      history.pushState({ portkey: 'analyzing' }, '');
+    }
+  }, [appMode]);
+
+  // Intercept browser Back from analyzing/analysis screens
+  useEffect(() => {
+    const handlePopState = () => {
+      if (appMode === 'analyzing' || appMode === 'analysis') {
+        setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [appMode, pendingMode]);
+
   // Load Razorpay script and restore session from localStorage
   useEffect(() => {
     // Load Razorpay script
@@ -1254,6 +1272,12 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="w-full max-w-sm px-4 text-center">
+          <button
+            onClick={() => setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv')}
+            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-6 flex items-center gap-1 text-sm mx-auto"
+          >
+            ← Back
+          </button>
           {analysisReady ? (
             <>
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
@@ -1311,6 +1335,12 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <button
+              onClick={() => setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv')}
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-4 flex items-center gap-1"
+            >
+              ← Back
+            </button>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Here&apos;s what the role needs</h1>
           </div>
         </section>
