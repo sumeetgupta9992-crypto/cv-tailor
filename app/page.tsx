@@ -1507,13 +1507,13 @@ export default function Home() {
           </div>
         </main>
 
-        {/* Floating "Tailor Another CV" — desktop: right side, vertical text */}
-        <div className="fixed right-5 top-1/2 -translate-y-1/2 z-30 hidden md:block">
+        {/* Floating "Tailor Another CV" — desktop: right side, horizontal text */}
+        <div className="fixed right-0 top-1/2 -translate-y-1/2 z-30 hidden md:block">
           <button
             onClick={() => setShowTailorAnotherModal(true)}
-            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-semibold px-3 py-5 rounded-xl shadow-md hover:shadow-lg hover:border-purple-400 dark:hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-all"
-            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-semibold px-4 py-3 rounded-l-xl shadow-md hover:shadow-lg hover:border-purple-400 dark:hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-all flex items-center gap-2"
           >
+            <RefreshCw className="w-4 h-4" />
             Tailor Another CV
           </button>
         </div>
