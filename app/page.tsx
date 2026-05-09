@@ -987,7 +987,7 @@ export default function Home() {
             onClick={handlePayment}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            Pay ₹{PRICE_INR} &amp; Generate
+            Pay ₹{PRICE_INR} & Generate CV
           </button>
 
           <button
@@ -1275,7 +1275,7 @@ export default function Home() {
               </p>
             ) : (
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Where should we send updates?
+                Your email
               </label>
             )}
             <input
@@ -1343,11 +1343,22 @@ export default function Home() {
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">A few quick questions to strengthen your CV</h2>
 
-              {/* Answered questions (faded) */}
+              {/* Answered questions (clickable to re-answer) */}
               {analysisAnswers.map((ans, idx) => (
-                <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-1 opacity-60">
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setAnalysisAnswers(analysisAnswers.slice(0, idx));
+                    setCurrentAnalysisAnswer('');
+                    setShowOtherInput(false);
+                  }}
+                  className="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-1 opacity-60 cursor-pointer hover:opacity-100 hover:ring-2 hover:ring-blue-400 transition-all group"
+                >
                   <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{analysisQuestions[idx].question}</p>
-                  <p className="text-sm text-slate-800 dark:text-slate-200">{ans || '(skipped)'}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{ans || '(skipped)'}</p>
+                    <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity ml-4 shrink-0">Edit</span>
+                  </div>
                 </div>
               ))}
 
@@ -1434,11 +1445,16 @@ export default function Home() {
           {/* Pay button — shown when no questions, or all answered */}
           {(analysisQuestions.length === 0 || allAnswered) && (
             <div className="cv-fade-in">
+              {!isAdminEmail(userEmail) && (
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-2">
+                  Pay on PhonePe &nbsp;→&nbsp; Return to this tab &nbsp;→&nbsp; Download your CV
+                </p>
+              )}
               <button
                 onClick={goToPaymentOrGenerate}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                {isAdminEmail(userEmail) ? 'Generate CV' : `Pay & Generate — ₹${PRICE_INR}`}
+                {isAdminEmail(userEmail) ? 'Generate CV' : `Pay ₹${PRICE_INR} & Generate CV`}
               </button>
               {isAdminEmail(userEmail) && (
                 <p className="text-center text-xs text-slate-400 mt-1">Admin access</p>
