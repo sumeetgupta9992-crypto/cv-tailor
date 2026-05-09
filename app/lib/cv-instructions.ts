@@ -156,6 +156,7 @@ CONTENT PRESERVATION — CRITICAL
 Never drop data from the original CV unless the page is genuinely full. A half-empty CV is worse than including every detail.
 
 • NEVER drop profile links (GitHub, LeetCode, CodeChef, LinkedIn, Portfolio, Codeforces). Include ALL links from the original CV in the "links" array.
+• NEVER modify, normalize, or infer URLs. Copy every URL character-for-character exactly as it appears in the source CV — including the path, username, trailing slash, and any subfolders (e.g. /u/, /users/, /in/). Do NOT rewrite a URL to match a "typical" format you know for that platform. The user's actual URL is the only correct one. Examples of what NOT to do: changing leetcode.com/u/Ashwary_Gupta/ to leetcode.com/ashwarygupta/, or stripping codechef.com/users/ashwarygupta13 to codechef.com/.
 • NEVER drop GPA, percentage, or board/school details from education. Include ALL education entries with all fields.
 • NEVER drop tech stack from projects. Each project must list its tech stack in "tech_stack".
 • NEVER drop skills that were in the original CV. Include ALL languages, frameworks, tools, databases.
@@ -176,9 +177,9 @@ The JSON must follow this exact structure:
   "phone": "phone number if found in CV, else omit field",
   "location": "City, Country if found in CV, else omit field",
   "links": [
-    { "label": "LinkedIn", "url": "linkedin.com/in/username" },
-    { "label": "GitHub", "url": "github.com/username" },
-    { "label": "LeetCode", "url": "leetcode.com/username" }
+    { "label": "LinkedIn", "url": "<exact URL copied verbatim from CV>" },
+    { "label": "GitHub", "url": "<exact URL copied verbatim from CV>" },
+    { "label": "LeetCode", "url": "<exact URL copied verbatim from CV>" }
   ],
   "tagline": "Current or Target Title | Domain1 · Domain2 · Domain3",
   "summary": "professional summary paragraph (no bold markers)",
@@ -246,7 +247,7 @@ CRITICAL — additional_sections: Any section in the candidate's CV that does no
 Rules for the JSON output:
 - tagline: MUST follow the format "[Title] | [Domain1] · [Domain2] · [Domain3]" — exactly 3 domain tags separated by ·. Domains describe the TYPE of problems solved, not the industry.
 - email, phone, location: only include if explicitly present in the CV. Do NOT invent contact details.
-- links: include ALL profile links from the CV (GitHub, LinkedIn, LeetCode, Portfolio, etc.). Each link is an object: { "label": "GitHub", "url": "github.com/username" }. Omit "links" only if the CV has no profile links.
+- links: include ALL profile links from the CV (GitHub, LinkedIn, LeetCode, Portfolio, etc.). Each link is an object: { "label": "GitHub", "url": "<copy URL exactly as-is from the CV>" }. CRITICAL: copy the url value character-for-character from the source — never guess, normalize, or reconstruct a URL from a platform name. Omit "links" only if the CV has no profile links.
 - In bullet strings, wrap exactly one number or outcome per bullet in **double asterisks** to indicate bold formatting.
 - Do NOT use **bold** anywhere in the summary string.
 - Keep all string values clean — no markdown headings, no extra newlines inside strings.

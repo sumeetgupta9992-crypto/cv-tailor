@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
     const PRESERVATION_RULES = `
 ⚠️  CONTENT PRESERVATION — CRITICAL:
 - NEVER drop profile links (GitHub, LeetCode, LinkedIn, Portfolio, Codeforces, CodeChef). Include ALL links in the "links" array.
+- NEVER modify, normalize, or reconstruct URLs. Copy every URL exactly as it appears in the source CV — including the full path, username format, and trailing slash. Do NOT rewrite URLs to match a "typical" format (e.g. do NOT change leetcode.com/u/Ashwary_Gupta/ to leetcode.com/ashwarygupta/, or strip codechef.com/users/ashwarygupta13 to codechef.com/). The original URL is the only correct one.
 - NEVER drop GPA, percentage, board name, or stream from education entries.
 - NEVER drop tech stack from projects. Every project must have "tech_stack".
 - NEVER drop project links (GitHub, Live Demo). Include them in the project's "links" array.
