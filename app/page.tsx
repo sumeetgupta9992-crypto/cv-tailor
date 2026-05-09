@@ -1381,7 +1381,7 @@ export default function Home() {
         </section>
 
         <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 space-y-6">
-          {/* Refinement — shown first */}
+          {/* Refinement textarea — at top */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Want to improve it?</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -1412,23 +1412,11 @@ export default function Home() {
               disabled={refinementCount >= 3}
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
-
-            <button
-              onClick={handleRefine}
-              disabled={refinementCount >= 3 || isRefining || !refinementFeedback.trim()}
-              className="mt-3 w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              {isRefining ? (
-                <><Loader className="w-4 h-4 animate-spin" /> Refining…</>
-              ) : refinementCount >= 3 ? (
-                'All refinements used'
-              ) : (
-                <><RefreshCw className="w-4 h-4" /> Refine CV — Refinement {refinementCount + 1} of 3</>
-              )}
-            </button>
           </div>
 
-          {/* Inputs — editable below refinement */}
+          {/* Update context section */}
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Update context if needed</p>
+
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><FileText className="w-5 h-5" />Your documents</h2>
             {cvFiles.length < 3 && (
@@ -1483,17 +1471,32 @@ export default function Home() {
               className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             />
           </div>
-        </main>
 
-        <div className="max-w-2xl mx-auto px-4 pb-12 sm:px-6 lg:px-8 text-center">
+          {/* Refine button — full-width at very bottom */}
           <button
-            onClick={() => setShowTailorAnotherModal(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            onClick={handleRefine}
+            disabled={refinementCount >= 3 || isRefining || !refinementFeedback.trim()}
+            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-4 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-base"
           >
-            <RefreshCw className="w-4 h-4" />
-            Tailor Another CV
+            {isRefining ? (
+              <><Loader className="w-5 h-5 animate-spin" /> Refining…</>
+            ) : refinementCount >= 3 ? (
+              'All refinements used'
+            ) : (
+              <><RefreshCw className="w-5 h-5" /> Refine CV — {refinesLeft} refinement{refinesLeft === 1 ? '' : 's'} left</>
+            )}
           </button>
-        </div>
+
+          <div className="text-center pb-4">
+            <button
+              onClick={() => setShowTailorAnotherModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Tailor Another CV
+            </button>
+          </div>
+        </main>
       </div>
     );
   }
