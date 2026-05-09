@@ -102,9 +102,12 @@ export default function Home() {
   const [supabaseRowId, setSupabaseRowId] = useState<string | null>(null);
   const [analysisReady, setAnalysisReady] = useState(false);
   const [detectedName, setDetectedName] = useState('');
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [showJdNudge, setShowJdNudge] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
+  const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const HINT_CATEGORIES = [
     {
@@ -525,15 +528,8 @@ export default function Home() {
     }
   };
 
-  const handleCheckMyFitFromExisting = async () => {
-    if (cvFiles.length === 0 && !additionalInfo.trim()) {
-      setErrorMsg('Please upload a file or add some information about yourself');
-      return;
-    }
-    setErrorMsg('');
-    setPendingMode('existing');
+  const _proceedExistingCV = async () => {
     setAppMode('analyzing');
-
     let cvContent = '';
     if (cvFiles.length > 0) {
       const parsed = await Promise.all(
@@ -547,9 +543,34 @@ export default function Home() {
       );
       cvContent = parsed.filter(Boolean).join('\n\n---\n\n');
     }
-
     const fullCvText = [cvContent, additionalInfo.trim()].filter(Boolean).join('\n\n');
     await runAnalysis(fullCvText);
+  };
+
+  const _proceedScratchCV = async () => {
+    setAppMode('analyzing');
+    const cvText = INTERVIEW_QUESTIONS.map((q, i) => `${q.question}\n${interviewAnswers[i] || '(skipped)'}`).join('\n\n');
+    await runAnalysis(cvText);
+  };
+
+  const handleJdNudgeContinue = async () => {
+    setShowJdNudge(false);
+    if (pendingMode === 'existing') await _proceedExistingCV();
+    else if (pendingMode === 'scratch') await _proceedScratchCV();
+  };
+
+  const handleCheckMyFitFromExisting = async () => {
+    if (cvFiles.length === 0 && !additionalInfo.trim()) {
+      setErrorMsg('Please upload a file or add some information about yourself');
+      return;
+    }
+    setErrorMsg('');
+    setPendingMode('existing');
+    if (!jobDescription.trim() || jobDescription.trim().length < 50) {
+      setShowJdNudge(true);
+      return;
+    }
+    await _proceedExistingCV();
   };
 
   const handleInterviewAnswer = () => {
@@ -581,9 +602,11 @@ export default function Home() {
       return;
     }
     setPendingMode('scratch');
-    setAppMode('analyzing');
-    const cvText = INTERVIEW_QUESTIONS.map((q, i) => `${q.question}\n${interviewAnswers[i] || '(skipped)'}`).join('\n\n');
-    await runAnalysis(cvText);
+    if (!jobDescription.trim() || jobDescription.trim().length < 50) {
+      setShowJdNudge(true);
+      return;
+    }
+    await _proceedScratchCV();
   };
 
   const isAdminEmail = (email: string) => ADMIN_EMAILS.includes(email.trim().toLowerCase());
@@ -600,6 +623,7 @@ export default function Home() {
     const newAnswers = [...analysisAnswers, answer];
     setAnalysisAnswers(newAnswers);
     setCurrentAnalysisAnswer('');
+    setShowOtherInput(false);
     if (newAnswers.length >= analysisQuestions.length) {
       goToPaymentOrGenerate();
     }
@@ -824,6 +848,30 @@ export default function Home() {
   if (appMode === 'interview') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        {/* JD nudge popup */}
+        {showJdNudge && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowJdNudge(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Add a job description?</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">Your CV will be much more targeted if tailored to a specific role. Paste the job description below — it takes 30 seconds.</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { setShowJdNudge(false); setTimeout(() => jdTextareaRef.current?.focus(), 100); }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  Add Job Description
+                </button>
+                <button
+                  onClick={handleJdNudgeContinue}
+                  className="w-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
+                >
+                  Continue without JD
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
             <button onClick={() => setAppMode('mode-selection')} className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-4 flex items-center gap-1">← Back</button>
@@ -865,9 +913,30 @@ export default function Home() {
               </div>
             </div>
 
+            {interviewIndex === INTERVIEW_QUESTIONS.length - 1 && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Got projects or skills not covered above?</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">Add them in the Additional Information box below before checking your fit — everything there goes straight into your CV.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Additional Information (Optional)</label>
+              <textarea
+                value={additionalInfo}
+                onChange={(e) => setAdditionalInfo(e.target.value)}
+                placeholder="Projects, skills, certifications, awards — anything not covered in the questions above"
+                rows={4}
+                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+            </div>
+
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Job Description (Optional)</label>
-              <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={4} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+              <textarea ref={jdTextareaRef} value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={4} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
             </div>
 
             <div ref={interviewEndRef} />
@@ -880,6 +949,30 @@ export default function Home() {
   if (appMode === 'existing-cv') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        {/* JD nudge popup */}
+        {showJdNudge && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowJdNudge(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Add a job description?</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">Your CV will be much more targeted if tailored to a specific role. Paste the job description below — it takes 30 seconds.</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { setShowJdNudge(false); setTimeout(() => jdTextareaRef.current?.focus(), 100); }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  Add Job Description
+                </button>
+                <button
+                  onClick={handleJdNudgeContinue}
+                  className="w-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
+                >
+                  Continue without JD
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Hints modal */}
         {showHintsModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowHintsModal(false)}>
@@ -982,7 +1075,7 @@ export default function Home() {
 
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Job Description</h2>
-              <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={6} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+              <textarea ref={jdTextareaRef} value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job description here (optional — if provided, your CV will be tailored to match)" rows={6} className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
             </div>
 
             <button
@@ -1114,6 +1207,32 @@ export default function Home() {
                           {opt}
                         </button>
                       ))}
+                      {!showOtherInput ? (
+                        <button
+                          onClick={() => setShowOtherInput(true)}
+                          className="text-left px-4 py-2.5 rounded-lg border border-dashed border-slate-400 dark:border-slate-500 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors text-sm"
+                        >
+                          Other…
+                        </button>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={currentAnalysisAnswer}
+                            onChange={(e) => setCurrentAnalysisAnswer(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAnalysisAnswer(currentAnalysisAnswer); }}
+                            placeholder="Type your answer…"
+                            className="w-full px-4 py-2 border border-blue-400 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <button
+                            onClick={() => handleAnalysisAnswer(currentAnalysisAnswer)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                          >
+                            Submit
+                          </button>
+                        </div>
+                      )}
                       <button
                         onClick={() => handleAnalysisAnswer('')}
                         className="text-left px-4 py-2.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-slate-400 transition-colors text-sm"
@@ -1252,11 +1371,12 @@ export default function Home() {
 
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV is Ready</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV has been downloaded</h1>
             <button onClick={handleDownload} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
               <Download className="w-5 h-5" />
               Download CV
             </button>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Downloads as Word + PDF</p>
           </div>
         </section>
 
@@ -1365,11 +1485,12 @@ export default function Home() {
           </div>
         </main>
 
-        <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-2xl mx-auto px-4 pb-12 sm:px-6 lg:px-8 text-center">
           <button
             onClick={() => setShowTailorAnotherModal(true)}
-            className="text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 underline underline-offset-2 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
           >
+            <RefreshCw className="w-4 h-4" />
             Tailor Another CV
           </button>
         </div>

@@ -38,7 +38,9 @@ Return ONLY this JSON:
 ${hasJD
   ? 'jd_requirements: array of 4-5 objects { "requirement": string, "match_status": "strong_match"|"partial_match"|"not_found" }. Cover hard requirements: visa/work authorization, minimum years of experience, mandatory skills.'
   : 'jd_requirements: empty array.'}
-questions: array of 2-5 objects { "question": string, "options": string[]|null }. Ask about gaps that would strengthen the CV${hasJD ? ' or that the JD values' : ''}. Use options[] for multiple-choice, null for open-ended. Return fewer questions if the profile is already comprehensive.`;
+questions: array of 2-5 objects { "question": string, "options": string[]|null }. Ask about gaps that would strengthen the CV${hasJD ? ' or that the JD values' : ''}. ALWAYS prefer multiple-choice: give 3-5 specific, concrete options whenever possible. Do NOT include "Other" in the options array — the UI adds it automatically. Only use null (open-ended) when the question genuinely cannot have predefined options (e.g. "What is your GitHub username?"). Return fewer questions if the profile is already comprehensive.
+
+FRESHER DETECTION: If the profile suggests a college student or fresher (current student, recent grad, no full-time work experience, internships only), frame ALL questions positively and assume they have done SOMETHING in every area. Never ask "Do you have X?" — instead ask "Which of these best describes your X?" or "What type of X have you done?". Never frame questions in a way that leads to a dead-end "No" answer. Assume they have academic projects, coursework, club activities, or online learning to draw from.`;
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
