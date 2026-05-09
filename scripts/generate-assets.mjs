@@ -43,77 +43,18 @@ if (!existsSync(join(publicDir, 'icon.png'))) {
   console.log('ℹ️  public/icon.png already exists — skipping (using existing logo)');
 }
 
-// ── Generate favicon.ico (32×32 PNG served as ico) ───────────────────────────
+// ── Generate favicon.ico (32×32 from real icon) ──────────────────────────────
 console.log('Generating public/favicon.ico…');
-await sharp(Buffer.from(iconSvg))
+await sharp(join(publicDir, 'icon.png'))
   .resize(32, 32)
   .png()
   .toFile(join(publicDir, 'favicon.ico'));
 console.log('✅ public/favicon.ico');
 
-// ── Load icon for OG composite ────────────────────────────────────────────────
-const iconForOg = await sharp(join(publicDir, 'icon.png'))
-  .resize(160, 160)
-  .png()
-  .toBuffer();
-
-// ── OG image SVG (1200×630) ───────────────────────────────────────────────────
-const ogSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <!-- Background -->
-  <rect width="1200" height="630" fill="#0A0A0A"/>
-  <!-- Subtle grid lines -->
-  <line x1="0" y1="315" x2="1200" y2="315" stroke="#1a1a1a" stroke-width="1"/>
-  <line x1="600" y1="0" x2="600" y2="630" stroke="#1a1a1a" stroke-width="1"/>
-  <!-- Icon placeholder (160×160 centred at 600,200) -->
-  <rect x="520" y="120" width="160" height="160" rx="36" fill="#0F6E56"/>
-
-  <!-- "Make the Jump" in gold -->
-  <text
-    x="600" y="360"
-    font-family="system-ui, -apple-system, sans-serif"
-    font-size="80"
-    font-weight="800"
-    fill="#D4A843"
-    text-anchor="middle"
-    dominant-baseline="middle"
-    letter-spacing="-2"
-  >Make the Jump</text>
-
-  <!-- Tagline in white -->
-  <text
-    x="600" y="440"
-    font-family="system-ui, -apple-system, sans-serif"
-    font-size="32"
-    font-weight="400"
-    fill="#CCCCCC"
-    text-anchor="middle"
-    dominant-baseline="middle"
-  >Craft resumes that take you there.</text>
-
-  <!-- "Portkey" brand small -->
-  <text
-    x="600" y="570"
-    font-family="system-ui, -apple-system, sans-serif"
-    font-size="22"
-    font-weight="600"
-    fill="#0F6E56"
-    text-anchor="middle"
-    dominant-baseline="middle"
-    letter-spacing="4"
-  >PORTKEY</text>
-</svg>
-`.trim();
-
+// ── OG image — resize icon to 1200×630 ───────────────────────────────────────
 console.log('Generating public/og-image.png…');
-await sharp(Buffer.from(ogSvg))
-  .composite([
-    {
-      input: iconForOg,
-      top: 120,
-      left: 520,
-    },
-  ])
+await sharp(join(publicDir, 'icon.png'))
+  .resize(1200, 630, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
   .png()
   .toFile(join(publicDir, 'og-image.png'));
 console.log('✅ public/og-image.png (1200×630)');
