@@ -871,11 +871,16 @@ export default function Home() {
           </p>
 
           {/* 7. Price pill */}
-          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56' }}>
-            🚀 Launch offer
-            <span className="line-through font-normal" style={{ color: '#888' }}>₹199</span>
-            ₹19 only
-          </span>
+          <div className="flex flex-col items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56' }}>
+              🚀 Launch offer —
+              <span className="line-through font-normal" style={{ color: '#888' }}>₹199</span>
+              ₹19 only
+            </span>
+            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold tracking-wide text-white" style={{ backgroundColor: '#0F6E56' }}>
+              90% OFF
+            </span>
+          </div>
 
           {/* 3. Alumnus badge — moved here, subtle trust signal */}
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56', borderColor: '#0F6E56' }}>
