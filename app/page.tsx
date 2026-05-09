@@ -315,7 +315,7 @@ export default function Home() {
         order_id: orderData.orderId,
         amount: 1900, // paise — must match order; here for display only
         currency: 'INR',
-        name: 'CV Tailor',
+        name: 'Portkey',
         description: 'CV generation + 3 refinements',
         handler: async (response: any) => {
           paymentHandlerFired = true;
