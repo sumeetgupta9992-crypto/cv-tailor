@@ -744,6 +744,9 @@ export default function Home() {
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-3">
               One CV won&apos;t get you every job
             </h1>
+            <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mb-2">
+              Fancy designs don&apos;t get you shortlisted. ATS software rejects 90% of CVs before a recruiter sees them.
+            </p>
             <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl">
               Each job description is different. Your CV should be too. AI-tailored in 2 minutes — matched to the role, not just your experience.
             </p>
