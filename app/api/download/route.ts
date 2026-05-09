@@ -11,6 +11,11 @@ import {
   TabStopType,
 } from "docx";
 
+type Link = {
+  label: string;
+  url: string;
+};
+
 type Contact = {
   email?: string;
   phone?: string;
@@ -29,10 +34,15 @@ type Education = {
   degree: string;
   institution: string;
   year: string;
+  gpa_or_percentage?: string | null;
+  details?: string | null;
 };
 
 type Project = {
   name: string;
+  description?: string | null;
+  tech_stack?: string | null;
+  links?: Link[];
   bullets: string[];
 };
 
@@ -41,12 +51,25 @@ type AdditionalSection = {
   items: string[];
 };
 
+type SkillCategories = {
+  languages?: string[];
+  frameworks_and_tools?: string[];
+  cloud_databases_infra?: string[];
+  coursework?: string[];
+};
+
 type CVData = {
   name: string;
-  tagline?: string;
+  // New flat contact fields (preferred by schema v2)
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: Link[];
+  // Legacy nested contact object (backward compat)
   contact?: Contact;
+  tagline?: string;
   summary: string;
-  skills: string[];
+  skills?: string[] | SkillCategories;
   experience: Experience[];
   education: Education[];
   projects?: Project[];
@@ -64,8 +87,7 @@ function parseBoldRuns(text: string, size: number, color: string): TextRun[] {
   );
 }
 
-// Right tab stop (twips). A4 text width with 720-twip margins = 11906 − 1440 = 10466.
-// Use 10100 so it fits safely on both A4 and Letter.
+// Right tab stop (twips). A4 text width with 720-twip margins ≈ 10466 twips.
 const RIGHT_TAB = 10100;
 
 function sectionHeader(title: string): Paragraph {
@@ -89,49 +111,8 @@ function bulletParagraph(text: string): Paragraph {
   });
 }
 
-// Build the contact line paragraph. Returns null if no contact fields present.
-function buildContactParagraph(contact: Contact): Paragraph | null {
-  // Collect plain-text items
-  const textItems: string[] = [
-    contact.email,
-    contact.phone,
-    contact.location,
-  ].filter((v): v is string => Boolean(v?.trim()));
-
-  const hasLinkedIn = Boolean(contact.linkedin?.trim());
-  if (textItems.length === 0 && !hasLinkedIn) return null;
-
-  const sep = () => new TextRun({ text: "  |  ", size: 20, color: "888888" });
-
-  // Using a typed union that docx accepts for Paragraph children
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const children: any[] = [];
-
-  textItems.forEach((item, i) => {
-    if (i > 0) children.push(sep());
-    children.push(new TextRun({ text: item, size: 20, color: "888888" }));
-  });
-
-  if (hasLinkedIn) {
-    if (children.length > 0) children.push(sep());
-    const raw = contact.linkedin!.trim();
-    const href = raw.startsWith("http") ? raw : `https://${raw}`;
-    children.push(
-      new ExternalHyperlink({
-        link: href,
-        children: [
-          // Let Word's built-in hyperlink style (blue, underlined) apply
-          new TextRun({ text: raw, size: 20 }),
-        ],
-      })
-    );
-  }
-
-  return new Paragraph({
-    children,
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 20, after: 80 },
-  });
+function safeHref(url: string): string {
+  return url.startsWith("http") ? url : `https://${url}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -149,14 +130,13 @@ export async function POST(request: NextRequest) {
     const children: Paragraph[] = [];
 
     // ── Name ──────────────────────────────────────────────────────────────
-    // Spec: 18pt, bold, centered, dark blue #2B579A, all caps
     children.push(
       new Paragraph({
         children: [
           new TextRun({
             text: cvData.name.toUpperCase(),
             bold: true,
-            size: 28,         // 14pt = 28 half-points
+            size: 28,
             color: "2B579A",
           }),
         ],
@@ -166,16 +146,11 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Tagline ───────────────────────────────────────────────────────────
-    // Spec: 10.5pt, centered, medium gray #444444
     if (cvData.tagline?.trim()) {
       children.push(
         new Paragraph({
           children: [
-            new TextRun({
-              text: cvData.tagline,
-              size: 21,         // 10.5pt = 21 half-points
-              color: "444444",
-            }),
+            new TextRun({ text: cvData.tagline, size: 21, color: "444444" }),
           ],
           alignment: AlignmentType.CENTER,
           spacing: { before: 0, after: 20 },
@@ -183,15 +158,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Contact line ──────────────────────────────────────────────────────
-    // Spec: 9pt, centered, light gray #888888, items separated by " | ", LinkedIn as hyperlink
-    if (cvData.contact) {
-      const contactPara = buildContactParagraph(cvData.contact);
-      if (contactPara) children.push(contactPara);
+    // ── Contact + Links ───────────────────────────────────────────────────
+    // Resolve contact from flat fields (schema v2) or legacy contact object
+    const contactEmail = cvData.email || cvData.contact?.email;
+    const contactPhone = cvData.phone || cvData.contact?.phone;
+    const contactLocation = cvData.location || cvData.contact?.location;
+    const legacyLinkedIn = cvData.contact?.linkedin;
+
+    const allLinks: Link[] = [
+      ...(legacyLinkedIn?.trim() ? [{ label: "LinkedIn", url: legacyLinkedIn.trim() }] : []),
+      ...(cvData.links || []).filter((l) => l.url?.trim()),
+    ];
+
+    const textContactItems = [contactEmail, contactPhone, contactLocation].filter(
+      (v): v is string => Boolean(v?.trim())
+    );
+
+    if (textContactItems.length || allLinks.length) {
+      const sep = () => new TextRun({ text: "  |  ", size: 20, color: "888888" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lineChildren: any[] = [];
+
+      textContactItems.forEach((item, i) => {
+        if (i > 0) lineChildren.push(sep());
+        lineChildren.push(new TextRun({ text: item.trim(), size: 20, color: "888888" }));
+      });
+
+      allLinks.forEach((link, i) => {
+        if (textContactItems.length > 0 || i > 0) lineChildren.push(sep());
+        lineChildren.push(
+          new ExternalHyperlink({
+            link: safeHref(link.url),
+            children: [new TextRun({ text: link.label || link.url, size: 20 })],
+          })
+        );
+      });
+
+      children.push(
+        new Paragraph({
+          children: lineChildren,
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 20, after: 80 },
+        })
+      );
     }
 
     // ── Summary ───────────────────────────────────────────────────────────
-    // Spec: no bold in summary (it's a narrative paragraph)
     if (cvData.summary?.trim()) {
       children.push(sectionHeader("SUMMARY"));
       children.push(
@@ -203,14 +215,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Experience ────────────────────────────────────────────────────────
-    // Spec: company bold 11pt black + date right-aligned 9.5pt italic gray
-    //       role title bold 10pt medium gray #444444
-    //       bullets 9.5pt black, • char, left 360 / hanging 200 twips
     if (cvData.experience?.length) {
       children.push(sectionHeader("EXPERIENCE"));
 
       for (const exp of cvData.experience) {
-        // Company + date — tab stop right-aligns date; ATS-friendly plain text
         children.push(
           new Paragraph({
             children: [
@@ -222,18 +230,12 @@ export async function POST(request: NextRequest) {
             spacing: { before: 120, after: 0 },
           })
         );
-
-        // Role title
         children.push(
           new Paragraph({
-            children: [
-              new TextRun({ text: exp.title, bold: true, size: 20, color: "444444" }),
-            ],
+            children: [new TextRun({ text: exp.title, bold: true, size: 20, color: "444444" })],
             spacing: { before: 0, after: 0 },
           })
         );
-
-        // Bullets
         for (const bullet of exp.bullets) {
           children.push(bulletParagraph(bullet));
         }
@@ -241,53 +243,137 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Education ─────────────────────────────────────────────────────────
-    // Spec: institution name bold, degree + score regular weight, year right-aligned
     if (cvData.education?.length) {
       children.push(sectionHeader("EDUCATION"));
 
       for (const edu of cvData.education) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const eduChildren: any[] = [
+          new TextRun({ text: edu.institution, bold: true, size: 19, color: "1A1A1A" }),
+          new TextRun({ text: "  —  " + edu.degree, size: 19, color: "1A1A1A" }),
+        ];
+
+        if (edu.gpa_or_percentage?.trim()) {
+          eduChildren.push(
+            new TextRun({ text: "  |  " + edu.gpa_or_percentage.trim(), size: 19, color: "444444" })
+          );
+        }
+
+        eduChildren.push(new Tab());
+        eduChildren.push(new TextRun({ text: edu.year, italics: true, size: 19, color: "888888" }));
+
         children.push(
           new Paragraph({
-            children: [
-              new TextRun({ text: edu.institution, bold: true, size: 19, color: "1A1A1A" }),
-              new TextRun({ text: "  —  " + edu.degree + "  ", size: 19, color: "1A1A1A" }),
-              new Tab(),
-              new TextRun({ text: edu.year, italics: true, size: 19, color: "888888" }),
-            ],
+            children: eduChildren,
             tabStops: [{ type: TabStopType.RIGHT, position: RIGHT_TAB }],
             spacing: { before: 60, after: 0 },
           })
         );
+
+        if (edu.details?.trim()) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: edu.details.trim(), size: 17, italics: true, color: "888888" }),
+              ],
+              spacing: { before: 0, after: 0 },
+            })
+          );
+        }
       }
     }
 
     // ── Skills ────────────────────────────────────────────────────────────
-    if (cvData.skills?.length) {
-      children.push(sectionHeader("SKILLS"));
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: cvData.skills.join("  •  "),
-              size: 19,
-              color: "1A1A1A",
-            }),
-          ],
-          spacing: { before: 40, after: 0 },
-        })
-      );
+    if (cvData.skills) {
+      const isArr = Array.isArray(cvData.skills);
+      const hasSkills = isArr
+        ? (cvData.skills as string[]).length > 0
+        : Object.values(cvData.skills as SkillCategories).some((v) => v?.length);
+
+      if (hasSkills) {
+        children.push(sectionHeader("SKILLS"));
+
+        if (isArr) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: (cvData.skills as string[]).join("  •  "), size: 19, color: "1A1A1A" }),
+              ],
+              spacing: { before: 40, after: 0 },
+            })
+          );
+        } else {
+          const cats = cvData.skills as SkillCategories;
+          const catEntries = [
+            { key: "languages", label: "Languages" },
+            { key: "frameworks_and_tools", label: "Frameworks & Tools" },
+            { key: "cloud_databases_infra", label: "Cloud / Databases / Infra" },
+            { key: "coursework", label: "Coursework" },
+          ];
+          for (const { key, label } of catEntries) {
+            const items = cats[key as keyof SkillCategories];
+            if (items?.length) {
+              children.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: label + ": ", bold: true, size: 19, color: "1A1A1A" }),
+                    new TextRun({ text: items.join("  •  "), size: 19, color: "1A1A1A" }),
+                  ],
+                  spacing: { before: 20, after: 0 },
+                })
+              );
+            }
+          }
+        }
+      }
     }
 
     // ── Projects ──────────────────────────────────────────────────────────
     if (cvData.projects?.length) {
       children.push(sectionHeader("PROJECTS"));
+
       for (const proj of cvData.projects) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const projNameChildren: any[] = [
+          new TextRun({ text: proj.name, bold: true, size: 20, color: "1A1A1A" }),
+        ];
+
+        if (proj.links?.length) {
+          for (const link of proj.links) {
+            projNameChildren.push(new TextRun({ text: "  ", size: 19 }));
+            projNameChildren.push(
+              new ExternalHyperlink({
+                link: safeHref(link.url),
+                children: [new TextRun({ text: `[${link.label}]`, size: 17, color: "2B579A" })],
+              })
+            );
+          }
+        }
+
         children.push(
-          new Paragraph({
-            children: [new TextRun({ text: proj.name, bold: true, size: 20, color: "1A1A1A" })],
-            spacing: { before: 60, after: 0 },
-          })
+          new Paragraph({ children: projNameChildren, spacing: { before: 60, after: 0 } })
         );
+
+        if (proj.tech_stack?.trim()) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: proj.tech_stack.trim(), size: 17, italics: true, color: "444444" }),
+              ],
+              spacing: { before: 0, after: 0 },
+            })
+          );
+        }
+
+        if (proj.description?.trim()) {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: proj.description.trim(), size: 17, color: "444444" })],
+              spacing: { before: 0, after: 0 },
+            })
+          );
+        }
+
         for (const bullet of proj.bullets) {
           children.push(bulletParagraph(bullet));
         }
@@ -325,7 +411,9 @@ export async function POST(request: NextRequest) {
       children.push(sectionHeader("INTERESTS"));
       children.push(
         new Paragraph({
-          children: [new TextRun({ text: cvData.interests.join("  •  "), size: 19, color: "1A1A1A" })],
+          children: [
+            new TextRun({ text: cvData.interests.join("  •  "), size: 19, color: "1A1A1A" }),
+          ],
           spacing: { before: 40, after: 0 },
         })
       );
@@ -343,21 +431,16 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Assemble document ─────────────────────────────────────────────────
-    // Spec: A4/Letter, 720 twip margins on all sides (0.5 inch), Calibri font
     const doc = new Document({
       styles: {
         default: {
-          document: {
-            run: { font: "Calibri" },
-          },
+          document: { run: { font: "Calibri" } },
         },
       },
       sections: [
         {
           properties: {
-            page: {
-              margin: { top: 720, bottom: 720, left: 720, right: 720 },
-            },
+            page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } },
           },
           children,
         },
@@ -379,10 +462,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

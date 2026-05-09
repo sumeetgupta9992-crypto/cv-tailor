@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jsPDF } from 'jspdf';
 
+type Link = {
+  label: string;
+  url: string;
+};
+
 type Contact = {
   email?: string;
   phone?: string;
@@ -19,10 +24,15 @@ type Education = {
   degree: string;
   institution: string;
   year: string;
+  gpa_or_percentage?: string | null;
+  details?: string | null;
 };
 
 type Project = {
   name: string;
+  description?: string | null;
+  tech_stack?: string | null;
+  links?: Link[];
   bullets: string[];
 };
 
@@ -31,12 +41,25 @@ type AdditionalSection = {
   items: string[];
 };
 
+type SkillCategories = {
+  languages?: string[];
+  frameworks_and_tools?: string[];
+  cloud_databases_infra?: string[];
+  coursework?: string[];
+};
+
 type CVData = {
   name: string;
-  tagline?: string;
+  // Flat contact fields (schema v2)
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: Link[];
+  // Legacy nested contact object (backward compat)
   contact?: Contact;
+  tagline?: string;
   summary: string;
-  skills: string[];
+  skills?: string[] | SkillCategories;
   experience: Experience[];
   education: Education[];
   projects?: Project[];
@@ -273,21 +296,34 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
     y += 5.5;
   }
 
-  // ── Contact line ──────────────────────────────────────────────────────
-  if (cvData.contact) {
-    const items: string[] = [];
-    if (cvData.contact.email?.trim()) items.push(cvData.contact.email.trim());
-    if (cvData.contact.phone?.trim()) items.push(cvData.contact.phone.trim());
-    if (cvData.contact.location?.trim()) items.push(cvData.contact.location.trim());
-    if (cvData.contact.linkedin?.trim()) items.push(cvData.contact.linkedin.trim());
+  // ── Contact + Links ───────────────────────────────────────────────────
+  {
+    const contactEmail = cvData.email || cvData.contact?.email;
+    const contactPhone = cvData.phone || cvData.contact?.phone;
+    const contactLocation = cvData.location || cvData.contact?.location;
+    const legacyLinkedIn = cvData.contact?.linkedin;
 
-    if (items.length) {
+    const parts: string[] = [];
+    if (contactEmail?.trim()) parts.push(contactEmail.trim());
+    if (contactPhone?.trim()) parts.push(contactPhone.trim());
+    if (contactLocation?.trim()) parts.push(contactLocation.trim());
+    if (legacyLinkedIn?.trim()) parts.push(legacyLinkedIn.trim());
+    for (const l of cvData.links || []) {
+      if (l.url?.trim()) parts.push(l.url.trim());
+    }
+
+    if (parts.length) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       const [cr, cg, cb] = hex('888888');
       doc.setTextColor(cr, cg, cb);
-      doc.text(items.join('  |  '), PAGE_W / 2, y, { align: 'center' });
-      y += 6;
+      const contactText = parts.join('  |  ');
+      const contactLines = doc.splitTextToSize(contactText, contentW) as string[];
+      for (const line of contactLines) {
+        doc.text(line, PAGE_W / 2, y, { align: 'center' });
+        y += 4;
+      }
+      y += 2;
     }
   }
 
@@ -342,32 +378,65 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
 
     for (const edu of cvData.education) {
       y = checkPage(doc, y, 6, p.margin);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(p.bfs);
       const [ir, ig, ib] = hex('1A1A1A');
+      doc.setFontSize(p.bfs);
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(ir, ig, ib);
       const instW = doc.getTextWidth(edu.institution);
       doc.text(edu.institution, p.margin, y);
 
       doc.setFont('helvetica', 'normal');
-      doc.text(`  —  ${edu.degree}`, p.margin + instW, y);
+      let degreeText = `  —  ${edu.degree}`;
+      if (edu.gpa_or_percentage?.trim()) degreeText += `  |  ${edu.gpa_or_percentage.trim()}`;
+      doc.text(degreeText, p.margin + instW, y);
 
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(p.bfs);
       const [yr2, yg, yb] = hex('888888');
       doc.setTextColor(yr2, yg, yb);
       doc.text(edu.year, p.margin + contentW, y, { align: 'right' });
       y += p.lh + 0.5;
+
+      if (edu.details?.trim()) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(p.bfs - 1);
+        doc.setTextColor(yr2, yg, yb);
+        doc.text(edu.details.trim(), p.margin, y);
+        y += p.lh;
+      }
     }
     y += gap(1);
   }
 
   // ── Skills ────────────────────────────────────────────────────────────
-  if (cvData.skills?.length) {
-    y = checkPage(doc, y, 12, p.margin);
-    y = sectionHeader(doc, 'SKILLS', y, p.margin, contentW);
-    y = renderWrappedText(doc, cvData.skills.join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
-    y += gap(2);
+  if (cvData.skills) {
+    const isArr = Array.isArray(cvData.skills);
+    const hasSkills = isArr
+      ? (cvData.skills as string[]).length > 0
+      : Object.values(cvData.skills as SkillCategories).some((v) => v?.length);
+
+    if (hasSkills) {
+      y = checkPage(doc, y, 12, p.margin);
+      y = sectionHeader(doc, 'SKILLS', y, p.margin, contentW);
+
+      if (isArr) {
+        y = renderWrappedText(doc, (cvData.skills as string[]).join('  •  '), p.margin, y, contentW, p.bfs, '1A1A1A', 'normal', p.lh);
+      } else {
+        const cats = cvData.skills as SkillCategories;
+        const catEntries = [
+          { key: 'languages', label: 'Languages' },
+          { key: 'frameworks_and_tools', label: 'Frameworks & Tools' },
+          { key: 'cloud_databases_infra', label: 'Cloud / Databases / Infra' },
+          { key: 'coursework', label: 'Coursework' },
+        ];
+        for (const { key, label } of catEntries) {
+          const items = cats[key as keyof SkillCategories];
+          if (items?.length) {
+            y = renderMixedWrappedText(doc, `**${label}:** ${items.join('  •  ')}`, p.margin, y, contentW, p.bfs, '1A1A1A', p.lh);
+          }
+        }
+      }
+      y += gap(2);
+    }
   }
 
   // ── Projects ──────────────────────────────────────────────────────────
@@ -377,12 +446,35 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
 
     for (const proj of cvData.projects) {
       y = checkPage(doc, y, 8, p.margin);
+
+      // Project name
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(p.bfs + 0.5);
       const [pr, pg, pb] = hex('1A1A1A');
       doc.setTextColor(pr, pg, pb);
       doc.text(proj.name, p.margin, y);
+
+      // Project links right-aligned on same line
+      if (proj.links?.length) {
+        const linkText = proj.links.map((l) => l.label).join(' | ');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(p.bfs - 1);
+        const [lr, lg, lb] = hex('2B579A');
+        doc.setTextColor(lr, lg, lb);
+        doc.text(linkText, p.margin + contentW, y, { align: 'right' });
+      }
       y += p.lh;
+
+      // Tech stack
+      if (proj.tech_stack?.trim()) {
+        y = renderWrappedText(doc, proj.tech_stack.trim(), p.margin, y, contentW, p.bfs - 0.5, '444444', 'italic', p.lh);
+      }
+
+      // One-line description
+      if (proj.description?.trim()) {
+        y = renderMixedWrappedText(doc, proj.description.trim(), p.margin, y, contentW, p.bfs - 0.5, '444444', p.lh);
+      }
+
       for (const bullet of proj.bullets) {
         y = checkPage(doc, y, 5, p.margin);
         y = renderBullet(doc, bullet, p.margin, y, contentW, p.bfs, p.lh);

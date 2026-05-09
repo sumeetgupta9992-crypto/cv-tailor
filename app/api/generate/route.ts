@@ -46,10 +46,25 @@ export async function POST(request: NextRequest) {
 
     let userPrompt = '';
 
+    const PRESERVATION_RULES = `
+⚠️  CONTENT PRESERVATION — CRITICAL:
+- NEVER drop profile links (GitHub, LeetCode, LinkedIn, Portfolio, Codeforces, CodeChef). Include ALL links in the "links" array.
+- NEVER drop GPA, percentage, board name, or stream from education entries.
+- NEVER drop tech stack from projects. Every project must have "tech_stack".
+- NEVER drop project links (GitHub, Live Demo). Include them in the project's "links" array.
+- NEVER drop any skills from the original CV. Include ALL languages, frameworks, tools, databases, and coursework.
+- NEVER drop any section. Non-standard sections (Achievements, Positions of Responsibility, etc.) go in "additional_sections".
+- If the CV is under one page, include EVERYTHING. Only condense when genuinely overflowing.
+
+SKILLS — ZERO TOLERANCE FOR DROPPING: Include EVERY SINGLE skill, language, framework, tool, and technology mentioned in the original CV. Do not consolidate, merge, or drop any skill. If the original CV lists C, C++, Java, JavaScript — all four must appear. If it lists HTML/CSS, Bash, scikit-learn, Pandas, NumPy, Tailwind, Bootstrap, NoSQL, Turborepo, MySQL — every single one must appear. Do not assume any skill is redundant or implied by another. Copy the complete skills list verbatim.
+
+ACHIEVEMENTS AND CONTEST RANKS: Include ALL achievements, contest ranks, and ratings exactly as they appear in the original CV. Do not merge individual contest ranks into a combined line (e.g. keep "LeetCode: 1800 rating" and "Codeforces: Expert" as separate items). Only consolidate if the page is genuinely full and there is no other way to fit the content.`;
+
     if (currentTailoredCV && feedback) {
       userPrompt = `Refine the tailored CV below based on the user's feedback. Apply all CV writing rules from your instructions.
 
 ⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
+${PRESERVATION_RULES}
 
 Original CV:
 ${cvText}${addlContext}${jdContext}${qaContext}
@@ -73,6 +88,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
       userPrompt = `${jobDescription ? 'Tailor' : 'Create'} the following CV${jobDescription ? ' for the job description provided' : ' highlighting the candidate\'s strongest experiences'}. Apply all CV writing rules from your instructions.
 
 ⚠️  CRITICAL: Every bullet point must be under 115 characters. Count each bullet. If any bullet exceeds 115 characters, shorten it. This is non-negotiable.
+${PRESERVATION_RULES}
 
 CV Content:
 ${cvText}${addlContext}${jdContext}${qaContext}
