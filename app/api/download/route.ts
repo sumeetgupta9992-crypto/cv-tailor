@@ -141,6 +141,8 @@ function safeText(text: string): string {
   return text;
 }
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -153,6 +155,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const cvName = cvData.name?.trim() || 'Candidate';
+
     const children: Paragraph[] = [];
 
     // ── Name ──────────────────────────────────────────────────────────────
@@ -160,7 +164,7 @@ export async function POST(request: NextRequest) {
       new Paragraph({
         children: [
           new TextRun({
-            text: cvData.name.toUpperCase(),
+            text: cvName.toUpperCase(),
             bold: true,
             size: 28,
             color: "2B579A",
@@ -502,9 +506,7 @@ export async function POST(request: NextRequest) {
     });
 
     const buffer = await Packer.toBuffer(doc);
-    const safeName = cvData.name
-      .replace(/[^a-zA-Z0-9\s-]/g, "")
-      .replace(/\s+/g, "-");
+    const safeName = cvName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-") || 'cv';
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -514,7 +516,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("[download-word] Error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

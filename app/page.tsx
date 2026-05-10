@@ -681,48 +681,59 @@ export default function Home() {
     }
   };
 
-  // iOS Safari blocks a.click() in async callbacks (user gesture is gone by then).
-  // Android Chrome does not have this restriction — a.click() downloads normally.
-  // So only iOS gets the window.open workaround; Android uses the standard path.
+  // iOS Safari: a.click() loses user gesture after any await — must window.open before fetch.
+  // Mac Safari: a.download on blob URLs is unreliable for PDF/DOCX — use window.open too.
+  // Android Chrome: a.click() works fine in async context.
   const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isSafariDesktop = () => {
+    const ua = navigator.userAgent;
+    return /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Android/i.test(ua) && !/iPhone|iPad|iPod/i.test(ua);
+  };
+  const needsWindowOpen = () => isIos() || isSafariDesktop();
 
   const triggerAnchorDownload = (url: string, filename: string) => {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+    // Keep element and blob URL alive for 60s so slow browsers can complete the download
+    setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 60000);
+  };
+
+  const fetchDownload = async (endpoint: string, label: string): Promise<Blob> => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cvData: cvJson }),
+    });
+    if (!response.ok) {
+      let serverMsg = `HTTP ${response.status}`;
+      try { const j = await response.json(); serverMsg = j.error || serverMsg; } catch {}
+      console.error(`[${label}] server error:`, serverMsg);
+      throw new Error(serverMsg);
+    }
+    return response.blob();
   };
 
   const handleDownloadWord = async () => {
     if (!cvJson || isDownloadingWord) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    // Open blank window synchronously (before any await) so iOS preserves the gesture
-    const win = isIos() ? window.open('about:blank', '_blank') : null;
+    const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
     setIsDownloadingWord(true);
     try {
-      const response = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvData: cvJson }),
-      });
-      if (!response.ok) throw new Error('Word download failed');
-      const blob = await response.blob();
+      const blob = await fetchDownload('/api/download', 'Word');
       const url = window.URL.createObjectURL(blob);
-      if (win) {
-        win.location.href = url;
-      } else {
-        triggerAnchorDownload(url, `${safeName}-tailored.docx`);
-      }
+      if (win) { win.location.href = url; }
+      else { triggerAnchorDownload(url, `${safeName}-tailored.docx`); }
       setWordDownloadDone(true);
       setTimeout(() => setWordDownloadDone(false), 3000);
       triggerFeedbackCard();
     } catch (error) {
       win?.close();
       console.error('Word download error:', error);
-      alert('Failed to download Word document');
+      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setIsDownloadingWord(false);
     }
@@ -731,29 +742,20 @@ export default function Home() {
   const handleDownloadPdf = async () => {
     if (!cvJson || isDownloadingPdf) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    const win = isIos() ? window.open('about:blank', '_blank') : null;
+    const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
     setIsDownloadingPdf(true);
     try {
-      const response = await fetch('/api/download-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvData: cvJson }),
-      });
-      if (!response.ok) throw new Error('PDF download failed');
-      const blob = await response.blob();
+      const blob = await fetchDownload('/api/download-pdf', 'PDF');
       const url = window.URL.createObjectURL(blob);
-      if (win) {
-        win.location.href = url;
-      } else {
-        triggerAnchorDownload(url, `${safeName}-tailored.pdf`);
-      }
+      if (win) { win.location.href = url; }
+      else { triggerAnchorDownload(url, `${safeName}-tailored.pdf`); }
       setPdfDownloadDone(true);
       setTimeout(() => setPdfDownloadDone(false), 3000);
       triggerFeedbackCard();
     } catch (error) {
       win?.close();
       console.error('PDF download error:', error);
-      alert('Failed to download PDF document');
+      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setIsDownloadingPdf(false);
     }

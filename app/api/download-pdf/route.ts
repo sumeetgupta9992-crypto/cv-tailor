@@ -635,6 +635,8 @@ function buildPDF(cvData: CVData, p: LayoutParams): jsPDF {
   return doc;
 }
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -644,6 +646,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'CV data is required' }, { status: 400 });
     }
 
+    // Guard against missing name — both buildPDF and safeName below would throw otherwise
+    if (!cvData.name?.trim()) cvData.name = 'Candidate';
+
     // Try progressively tighter layouts until the PDF fits on one page
     let doc = buildPDF(cvData, LAYOUT_ATTEMPTS[0]);
     for (let i = 1; i < LAYOUT_ATTEMPTS.length && doc.getNumberOfPages() > 1; i++) {
@@ -651,9 +656,7 @@ export async function POST(request: NextRequest) {
     }
 
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
-    const safeName = cvData.name
-      .replace(/[^a-zA-Z0-9\s-]/g, '')
-      .replace(/\s+/g, '-');
+    const safeName = cvData.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-') || 'cv';
 
     return new NextResponse(pdfBuffer, {
       headers: {
@@ -662,7 +665,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[download-pdf] Error:', error);
+    console.error('[download-pdf] Error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : '');
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
