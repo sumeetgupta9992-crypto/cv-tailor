@@ -871,6 +871,9 @@ export default function Home() {
   if (appMode === 'mode-selection') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="px-5 pt-4">
+          <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
+        </div>
         <main className="max-w-xl mx-auto px-4 py-4 md:py-12 sm:px-6 flex flex-col items-center gap-3 md:gap-6 text-center">
 
           {/* 1. Quote block — compact on mobile */}
@@ -1194,6 +1197,9 @@ export default function Home() {
           </div>
         )}
 
+        <div className="px-5 pt-4">
+          <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
+        </div>
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
             <button onClick={() => setAppMode('mode-selection')} className="text-blue-600 hover:text-blue-700 dark:text-blue-400 mb-4 flex items-center gap-1">← Back</button>
@@ -1492,7 +1498,10 @@ export default function Home() {
 
   if (appMode === 'generating') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="absolute top-4 left-5">
+          <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
+        </div>
         <div className="text-center">
           <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Generating your CV...</h2>
