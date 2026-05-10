@@ -8,6 +8,17 @@ const PRICE_INR = 19;
 const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
 const ADMIN_EMAILS = ['p14sumeetg@iima.ac.in', 'sumeetgupta9992@gmail.com'];
 
+const MAGIC_MESSAGES = [
+  'Summoning your achievements... ✨',
+  'Transfiguring bullet points... 🪄',
+  'Brewing the perfect summary... ⚗️',
+  'Enchanting your experience... ✨',
+  'Conjuring ATS-friendly formatting... 📜',
+  'Weaving your story together... 🧵',
+  'Forging your career narrative... 🔥',
+  'Casting the final spell... ⚡',
+];
+
 function extractEmailFromText(text: string): string | null {
   const m = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
   return m ? m[0] : null;
@@ -93,6 +104,7 @@ export default function Home() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [wordDownloadDone, setWordDownloadDone] = useState(false);
   const [pdfDownloadDone, setPdfDownloadDone] = useState(false);
+  const [magicMsgIdx, setMagicMsgIdx] = useState(0);
   const [pendingCvContent, setPendingCvContent] = useState('');
   const [pendingMode, setPendingMode] = useState<'existing' | 'scratch' | null>(null);
   const [jdRequirements, setJdRequirements] = useState<JDRequirement[]>([]);
@@ -194,6 +206,14 @@ export default function Home() {
     if (appMode === 'analyzing' || appMode === 'payment') {
       history.pushState({ portkey: appMode }, '');
     }
+  }, [appMode]);
+
+  // Cycle magic messages every 3s while generating
+  useEffect(() => {
+    if (appMode !== 'generating') return;
+    setMagicMsgIdx(0);
+    const id = setInterval(() => setMagicMsgIdx(i => (i + 1) % MAGIC_MESSAGES.length), 3000);
+    return () => clearInterval(id);
   }, [appMode]);
 
   // Intercept browser Back from analyzing/analysis/payment screens
@@ -871,18 +891,18 @@ export default function Home() {
   if (appMode === 'mode-selection') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <div className="px-5 pt-4">
-          <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
+        <div className="flex justify-center pt-6 pb-2">
+          <img src="/icon.png" alt="Portkey" className="h-20 w-20 object-contain" draggable={false} />
         </div>
-        <main className="max-w-xl mx-auto px-4 py-4 md:py-12 sm:px-6 flex flex-col items-center gap-3 md:gap-6 text-center">
+        <main className="max-w-xl mx-auto px-4 py-4 md:py-8 sm:px-6 flex flex-col items-center gap-3 md:gap-6 text-center">
 
-          {/* 1. Quote block — compact on mobile */}
-          <div className="w-full rounded-2xl p-3 md:p-5 text-left" style={{ backgroundColor: '#E1F5EE' }}>
-            <p className="text-xs md:text-sm leading-relaxed mb-2 md:mb-3 italic" style={{ color: '#1a4a3a' }}>
+          {/* 1. Quote block */}
+          <div className="w-full rounded-2xl p-3 md:p-5 text-left" style={{ backgroundColor: '#FDF3E0' }}>
+            <p className="text-xs md:text-sm leading-relaxed mb-2 md:mb-3 italic" style={{ color: '#5C3A1E' }}>
               &ldquo;My first CV took 3 months. I nagged every senior I knew. Rewrote it 5 times. Still wasn&apos;t sure it was right.&rdquo;
             </p>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#0F6E56' }}>V</div>
+              <div className="w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#740001' }}>V</div>
               <span className="text-xs text-slate-600">Vaibhav, Final Year Student</span>
             </div>
           </div>
@@ -897,56 +917,56 @@ export default function Home() {
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white leading-tight">
               Every job deserves a different CV.
             </h1>
-            <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mt-1" style={{ color: '#0F6E56' }}>
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mt-1" style={{ color: '#D4A843' }}>
               Your ATS-ready CV is 5 minutes away.
             </h2>
           </div>
 
-          {/* 5. Steps row — flat, non-interactive; hidden on mobile */}
+          {/* 5. Steps row */}
           <div className="hidden md:flex items-center gap-1 flex-wrap justify-center">
             {(['Upload CV', 'Paste JD', 'Get tailored CV'] as const).map((step, i) => (
               <span key={step} className="flex items-center gap-1">
                 <span className="px-3 py-1.5 rounded text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 select-none cursor-default">
                   {step}
                 </span>
-                {i < 2 && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#0F6E56' }} />}
+                {i < 2 && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#D4A843' }} />}
               </span>
             ))}
           </div>
 
-          {/* 6. Scratch note — prominent teal, visible on all screens */}
-          <p className="text-sm font-medium" style={{ color: '#0F6E56' }}>
+          {/* 6. Scratch note */}
+          <p className="text-sm font-medium" style={{ color: '#D4A843' }}>
             ✨ No CV yet? Start from scratch — we&apos;ll guide you.
           </p>
 
           {/* 7. Price pill */}
           <div className="flex flex-col items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56' }}>
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#FDF3E0', color: '#740001' }}>
               🚀 Launch offer —
               <span className="line-through font-normal" style={{ color: '#888' }}>₹199</span>
               ₹19 only
             </span>
-            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold tracking-wide text-white" style={{ backgroundColor: '#0F6E56' }}>
+            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold tracking-wide text-white" style={{ backgroundColor: '#740001' }}>
               90% OFF
             </span>
           </div>
 
-          {/* 3. Alumnus badge — moved here, subtle trust signal */}
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border" style={{ backgroundColor: '#E1F5EE', color: '#0F6E56', borderColor: '#0F6E56' }}>
+          {/* 3. Alumnus badge */}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border" style={{ backgroundColor: '#FDF3E0', color: '#740001', borderColor: '#D4A843' }}>
             <Award className="w-3 h-3" />
             By an IIM Ahmedabad alumnus
           </span>
 
-          {/* 8. CTA buttons — compact padding on mobile */}
+          {/* 8. CTA buttons */}
           <div className="w-full grid grid-cols-2 gap-3 md:gap-4">
             <button
               onClick={() => setAppMode('existing-cv')}
               className="group relative bg-white dark:bg-slate-800 rounded-xl shadow p-4 md:p-6 hover:shadow-lg transition-all text-left border border-slate-200 dark:border-slate-700"
             >
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight className="w-4 h-4" style={{ color: '#0F6E56' }} />
+                <ChevronRight className="w-4 h-4" style={{ color: '#D4A843' }} />
               </div>
-              <FileText className="w-8 h-8 md:w-10 md:h-10 mb-2 md:mb-3" style={{ color: '#0F6E56' }} />
+              <FileText className="w-8 h-8 md:w-10 md:h-10 mb-2 md:mb-3" style={{ color: '#D4A843' }} />
               <h2 className="text-sm md:text-lg font-bold text-slate-900 dark:text-white mb-0.5">I Have a CV</h2>
               <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">Tailor it for a role</p>
             </button>
@@ -968,7 +988,7 @@ export default function Home() {
           <div className="flex items-center gap-3 md:gap-4 flex-wrap justify-center pb-4 md:pb-8">
             {['ATS-friendly', 'Word doc download', '3 refinements included'].map((item) => (
               <span key={item} className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#0F6E56' }} />
+                <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#D4A843' }} />
                 {item}
               </span>
             ))}
@@ -997,12 +1017,12 @@ export default function Home() {
               <span className="text-slate-700 dark:text-slate-300 font-medium">Total Price</span>
               <div className="flex items-baseline gap-2">
                 <span className="text-lg line-through text-slate-400 dark:text-slate-500">₹199</span>
-                <span className="text-3xl font-bold text-green-600 dark:text-green-400">₹{PRICE_INR}</span>
+                <span className="text-3xl font-bold" style={{ color: '#D4A843' }}>₹{PRICE_INR}</span>
               </div>
             </div>
             <div className="flex items-center justify-between mt-2">
               <p className="text-sm text-slate-600 dark:text-slate-400">UPI payment only · Secure checkout by Razorpay</p>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{ backgroundColor: '#FDF3E0', color: '#740001', borderColor: '#D4A843' }}>
                 90% OFF — Launch Offer
               </span>
             </div>
@@ -1280,13 +1300,25 @@ export default function Home() {
         <div className="w-full max-w-sm px-4 text-center">
           {analysisReady ? (
             <>
-              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <CheckCircle className="w-12 h-12 mx-auto mb-4" style={{ color: '#D4A843' }} />
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysis complete</h2>
               <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Ready to show you how you match up</p>
             </>
           ) : (
             <>
-              <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <div className="relative w-24 h-24 mx-auto mb-4">
+                <div className="wand-sweep flex items-center justify-center w-full h-full">
+                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                    <line x1="14" y1="52" x2="50" y2="12" stroke="#D4A843" strokeWidth="3.5" strokeLinecap="round"/>
+                    <circle cx="50" cy="12" r="4" fill="#EEBA30"/>
+                    <circle cx="50" cy="12" r="9" fill="#EEBA30" opacity="0.2"/>
+                  </svg>
+                </div>
+                <span className="sparkle-particle text-sm" style={{ top: 4, right: 6, animationDelay: '0s' }}>✦</span>
+                <span className="sparkle-particle text-xs" style={{ top: 0, right: 20, animationDelay: '0.65s' }}>✦</span>
+                <span className="sparkle-particle text-sm" style={{ top: 10, right: 2, animationDelay: '1.3s' }}>★</span>
+                <span className="sparkle-particle text-xs" style={{ top: 2, right: 14, animationDelay: '0.3s' }}>✦</span>
+              </div>
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
               <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Comparing your background against the role</p>
             </>
@@ -1352,7 +1384,7 @@ export default function Home() {
               {jdRequirements.map((req, idx) => (
                 <div key={idx} className="flex items-start gap-3">
                   {req.match_status === 'strong_match' && (
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#D4A843' }} />
                   )}
                   {req.match_status === 'partial_match' && (
                     <span className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
@@ -1502,10 +1534,28 @@ export default function Home() {
         <div className="absolute top-4 left-5">
           <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
         </div>
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Generating your CV...</h2>
-          <p className="text-slate-600 dark:text-slate-300 mt-2">This may take a moment</p>
+        <div className="text-center px-6">
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="wand-sweep flex items-center justify-center w-full h-full">
+              <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                <line x1="14" y1="52" x2="50" y2="12" stroke="#D4A843" strokeWidth="3.5" strokeLinecap="round"/>
+                <circle cx="50" cy="12" r="4" fill="#EEBA30"/>
+                <circle cx="50" cy="12" r="9" fill="#EEBA30" opacity="0.2"/>
+              </svg>
+            </div>
+            <span className="sparkle-particle text-sm" style={{ top: 4, right: 6, animationDelay: '0s' }}>✦</span>
+            <span className="sparkle-particle text-xs" style={{ top: 0, right: 20, animationDelay: '0.65s' }}>✦</span>
+            <span className="sparkle-particle text-sm" style={{ top: 10, right: 2, animationDelay: '1.3s' }}>★</span>
+            <span className="sparkle-particle text-xs" style={{ top: 2, right: 14, animationDelay: '0.3s' }}>✦</span>
+          </div>
+          <p
+            key={magicMsgIdx}
+            className="magic-message text-xl font-semibold"
+            style={{ color: '#D4A843' }}
+          >
+            {MAGIC_MESSAGES[magicMsgIdx]}
+          </p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-4">This may take a moment…</p>
         </div>
       </div>
     );
@@ -1598,7 +1648,9 @@ export default function Home() {
               <button
                 onClick={handleDownloadPdf}
                 disabled={isDownloadingPdf}
-                className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="flex-1 sm:flex-none disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2" style={{ backgroundColor: '#740001' }}
+                onMouseEnter={e => { if (!isDownloadingPdf) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#8B0002'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#740001'; }}
               >
                 {isDownloadingPdf ? (
                   <><Loader className="w-5 h-5 animate-spin" /> Downloading…</>
@@ -1619,7 +1671,7 @@ export default function Home() {
                       <div className="flex gap-3">
                         <button
                           onClick={() => handleFeedbackRating('positive')}
-                          className="flex-1 text-3xl py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
+                          className="flex-1 text-3xl py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 hover:border-yellow-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all"
                         >
                           👍
                         </button>
@@ -1709,13 +1761,13 @@ export default function Home() {
 
         <main className="max-w-2xl mx-auto px-4 py-10 sm:px-6 lg:px-8 pb-24 md:pb-10 space-y-6">
           {refinementChanges.length > 0 && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" />What changed in this version
               </h3>
               <ul className="space-y-1">
                 {refinementChanges.map((change, idx) => (
-                  <li key={idx} className="flex gap-2 text-sm text-green-800 dark:text-green-200">
+                  <li key={idx} className="flex gap-2 text-sm text-amber-800 dark:text-amber-200">
                     <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                     <span>{change}</span>
                   </li>
