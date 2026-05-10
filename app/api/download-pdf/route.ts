@@ -113,9 +113,10 @@ function safeHref(url: string): string {
 }
 
 // jsPDF built-in helvetica does not have the ₹ glyph — substitute Rs.
-function sanitizeForPdf(text: string): string {
-  if (text.includes('₹')) console.log('[download-pdf] ₹ detected, substituting Rs.:', text.substring(0, 80));
-  return text.replace(/₹/g, 'Rs.');
+function sanitizeForPdf(text: unknown): string {
+  const s = typeof text === 'string' ? text : String(text ?? '');
+  if (s.includes('₹')) console.log('[download-pdf] ₹ detected, substituting Rs.:', s.substring(0, 80));
+  return s.replace(/₹/g, 'Rs.');
 }
 
 // Hex color → [r, g, b]
@@ -126,14 +127,15 @@ function hex(h: string): [number, number, number] {
 
 // Split text at **bold** markers → [{text, bold}]
 function parseBoldSegments(text: string): { text: string; bold: boolean }[] {
-  const parts = text.split(/\*\*(.*?)\*\*/);
+  const safe = typeof text === 'string' ? text : String(text ?? '');
+  const parts = safe.split(/\*\*(.*?)\*\*/);
   return parts.map((p, i) => ({ text: p, bold: i % 2 === 1 }));
 }
 
 // Render wrapped plain text block. Returns new y after the block.
 function renderWrappedText(
   doc: jsPDF,
-  text: string,
+  text: unknown,
   x: number,
   y: number,
   maxWidth: number,
@@ -142,9 +144,10 @@ function renderWrappedText(
   fontStyle: 'normal' | 'bold' | 'italic',
   lineHeight: number
 ): number {
+  const safeT = typeof text === 'string' ? text : String(text ?? '');
   doc.setFontSize(fontSize);
   doc.setFont('helvetica', fontStyle);
-  const lines = doc.splitTextToSize(text, maxWidth) as string[];
+  const lines = doc.splitTextToSize(safeT, maxWidth) as string[];
   const [r, g, b] = hex(color);
   doc.setTextColor(r, g, b);
   for (const line of lines) {
@@ -157,7 +160,7 @@ function renderWrappedText(
 // Render mixed bold/normal wrapped text. Word-by-word layout across lines.
 function renderMixedWrappedText(
   doc: jsPDF,
-  text: string,
+  text: unknown,
   x: number,
   startY: number,
   maxWidth: number,
@@ -165,11 +168,12 @@ function renderMixedWrappedText(
   color: string,
   lineHeight: number
 ): number {
+  const safeT = typeof text === 'string' ? text : String(text ?? '');
   const [r, g, b] = hex(color);
   doc.setFontSize(fontSize);
   doc.setTextColor(r, g, b);
 
-  const segments = parseBoldSegments(text);
+  const segments = parseBoldSegments(safeT);
   const tokens: { word: string; bold: boolean }[] = [];
   for (const seg of segments) {
     for (const word of seg.text.split(' ')) {

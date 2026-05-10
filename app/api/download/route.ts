@@ -91,7 +91,8 @@ type CVData = {
 
 // Split "**bold**" markers into TextRun arrays
 function parseBoldRuns(text: string, size: number, color: string): TextRun[] {
-  const parts = text.split(/\*\*(.*?)\*\*/);
+  const safe = typeof text === 'string' ? text : String(text ?? '');
+  const parts = safe.split(/\*\*(.*?)\*\*/);
   return parts.map(
     (part, i) => new TextRun({ text: part, bold: i % 2 === 1, size, color })
   );
@@ -136,9 +137,10 @@ function normalizeExp(exp: Experience): { company: string; duration: string; loc
   };
 }
 
-function safeText(text: string): string {
-  if (text.includes('₹')) console.log('[download-word] ₹ detected in text:', text.substring(0, 80));
-  return text;
+function safeText(text: unknown): string {
+  const s = typeof text === 'string' ? text : String(text ?? '');
+  if (s.includes('₹')) console.log('[download-word] ₹ detected in text:', s.substring(0, 80));
+  return s;
 }
 
 export const maxDuration = 60;
