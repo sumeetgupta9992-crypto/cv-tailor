@@ -214,10 +214,6 @@ export default function Home() {
     return () => clearInterval(id);
   }, [appMode]);
 
-  // Show download tip popup whenever the success screen is reached
-  useEffect(() => {
-    if (appMode === 'success') setShowInAppModal(true);
-  }, [appMode]);
 
   // Intercept browser Back from analyzing/analysis screens
   useEffect(() => {
