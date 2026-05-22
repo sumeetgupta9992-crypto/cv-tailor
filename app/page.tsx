@@ -97,7 +97,6 @@ export default function Home() {
   const [refinementCount, setRefinementCount] = useState(0);
   const [refinementFeedback, setRefinementFeedback] = useState('');
   const [refinementChanges, setRefinementChanges] = useState<string[]>([]);
-  const [isPaid, setIsPaid] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [refineSuccess, setRefineSuccess] = useState(false);
   const [isDownloadingWord, setIsDownloadingWord] = useState(false);
@@ -121,17 +120,22 @@ export default function Home() {
   const [detectedName, setDetectedName] = useState('');
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [showJdNudge, setShowJdNudge] = useState(false);
+  const [showInAppModal, setShowInAppModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showFeedbackCard, setShowFeedbackCard] = useState(false);
   const [feedbackPhase, setFeedbackPhase] = useState<'rating' | 'text' | 'thanks'>('rating');
   const [feedbackRating, setFeedbackRating] = useState<'positive' | 'negative' | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [emailSendStatus, setEmailSendStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
   const refinementTextareaRef = useRef<HTMLTextAreaElement>(null);
   const feedbackAutoSubmitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref so Razorpay's async handler always reads the latest value, never a stale closure snapshot
+  const pendingCvContentRef = useRef('');
 
   const HINT_CATEGORIES = [
     {
@@ -196,6 +200,11 @@ export default function Home() {
     setTimeout(() => setCopiedHint(null), 1500);
   };
 
+  // Keep ref in sync so Razorpay's async handler always sees the latest CV content
+  useEffect(() => {
+    pendingCvContentRef.current = pendingCvContent;
+  }, [pendingCvContent]);
+
   // Ensure the "Tailor Another CV" modal is never open when entering the success screen
   useEffect(() => {
     if (appMode === 'success') setShowTailorAnotherModal(false);
@@ -216,6 +225,11 @@ export default function Home() {
     return () => clearInterval(id);
   }, [appMode]);
 
+  // Show download tip popup whenever the success screen is reached
+  useEffect(() => {
+    if (appMode === 'success') setShowInAppModal(true);
+  }, [appMode]);
+
   // Intercept browser Back from analyzing/analysis/payment screens
   useEffect(() => {
     const handlePopState = () => {
@@ -229,7 +243,7 @@ export default function Home() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [appMode, pendingMode]);
 
-  // Load Razorpay script and restore session from localStorage
+  // Load Razorpay script and restore session from localStorage or ?s= URL param
   useEffect(() => {
     // Load Razorpay script
     const script = document.createElement('script');
@@ -237,32 +251,53 @@ export default function Home() {
     script.async = true;
     document.body.appendChild(script);
 
-    // Restore session from localStorage (only on client side)
-    if (typeof window !== 'undefined') {
-      const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedSession) {
-        try {
-          const session: SessionData = JSON.parse(savedSession);
-          if (Date.now() < session.expiryTime && session.paid) {
-            // Session is valid
-            setIsPaid(true);
-            setAdditionalInfo(session.additionalInfo);
-            setJobDescription(session.jobDescription);
-            setInterviewAnswers(session.interviewAnswers);
-            setCvJson(session.cvJson);
-            setRefinementCount(session.refinementCount);
-            setRefinementChanges(session.refinementChanges);
-            setPendingCvContent(session.pendingCvContent || session.cvContent || '');
-            if (session.email) setUserEmail(session.email);
-            if (session.supabaseRowId) setSupabaseRowId(session.supabaseRowId);
+    if (typeof window === 'undefined') return;
+
+    // ?s=<supabaseRowId> — shared link from another browser (e.g. copy-link from IAB)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedSessionId = urlParams.get('s');
+    if (sharedSessionId) {
+      // Clean the URL immediately so it doesn't linger
+      window.history.replaceState({}, '', window.location.pathname);
+      supabase
+        .from('cv_generations')
+        .select('id, cv_content, refinement_count')
+        .eq('id', sharedSessionId)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data?.cv_content) {
+            setCvJson(data.cv_content);
+            setRefinementCount(data.refinement_count ?? 0);
+            setSupabaseRowId(data.id);
+        
             setAppMode('success');
-          } else {
-            // Session expired
-            localStorage.removeItem(SESSION_STORAGE_KEY);
           }
-        } catch (e) {
+        });
+      return; // skip localStorage restoration when a shared link is used
+    }
+
+    // Restore session from localStorage
+    const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (savedSession) {
+      try {
+        const session: SessionData = JSON.parse(savedSession);
+        if (Date.now() < session.expiryTime && session.paid) {
+      
+          setAdditionalInfo(session.additionalInfo);
+          setJobDescription(session.jobDescription);
+          setInterviewAnswers(session.interviewAnswers);
+          setCvJson(session.cvJson);
+          setRefinementCount(session.refinementCount);
+          setRefinementChanges(session.refinementChanges);
+          setPendingCvContent(session.pendingCvContent || session.cvContent || '');
+          if (session.email) setUserEmail(session.email);
+          if (session.supabaseRowId) setSupabaseRowId(session.supabaseRowId);
+          setAppMode('success');
+        } else {
           localStorage.removeItem(SESSION_STORAGE_KEY);
         }
+      } catch (e) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
       }
     }
   }, []);
@@ -288,7 +323,7 @@ export default function Home() {
 
   const clearSession = () => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
-    setIsPaid(false);
+
     setCvFiles([]);
     setAdditionalInfo('');
     setJobDescription('');
@@ -313,12 +348,13 @@ export default function Home() {
     setFeedbackRating(null);
     setFeedbackText('');
     setFeedbackSubmitted(false);
+    setEmailSendStatus('idle');
     setAppMode('mode-selection');
   };
 
   const handlePayment = async () => {
     if (SKIP_PAYMENT) {
-      setIsPaid(true);
+  
       await proceedAfterPayment();
       return;
     }
@@ -394,7 +430,7 @@ export default function Home() {
 
             if (verifyData.success) {
               console.log('[Razorpay] Verification passed — proceeding to generate');
-              setIsPaid(true);
+          
               await proceedAfterPayment();
             } else {
               console.error('[Razorpay] Verification failed:', verifyData.error);
@@ -461,21 +497,27 @@ export default function Home() {
   // Called immediately after payment. Files are already parsed and stored in pendingCvContent
   // from the analyze step. Analysis answers are already collected. Just generate.
   const proceedAfterPayment = async () => {
+    // Read from ref first — it always holds the latest value even if this closure is stale
+    // (which can happen when Razorpay's async handler fires after a mobile UPI redirect)
+    const cvText = pendingCvContentRef.current || pendingCvContent;
+
     console.log('[proceedAfterPayment] entered', {
-      cvLength: pendingCvContent.length,
+      cvLength: cvText.length,
+      refLength: pendingCvContentRef.current.length,
+      stateLength: pendingCvContent.length,
       questionsCount: analysisQuestions.length,
       answersCount: analysisAnswers.length,
     });
 
-    if (!pendingCvContent.trim()) {
-      console.error('[proceedAfterPayment] pendingCvContent is empty — cannot generate');
+    if (!cvText.trim()) {
+      console.error('[proceedAfterPayment] CV content is empty — cannot generate');
       setErrorMsg('CV content was lost. Please go back and re-upload your CV.');
       setAppMode('error');
       return;
     }
 
     const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
-    await generateCV(pendingCvContent, qa);
+    await generateCV(cvText, qa);
   };
 
   const generateCV = async (cvText: string, answers: Array<{ question: string; answer: string }>) => {
@@ -669,6 +711,11 @@ export default function Home() {
   const isAdminEmail = (email: string) => ADMIN_EMAILS.includes(email.trim().toLowerCase());
 
   const goToPaymentOrGenerate = () => {
+    if (!pendingCvContentRef.current.trim()) {
+      setErrorMsg('CV content is missing. Please go back and re-upload your CV.');
+      setAppMode('error');
+      return;
+    }
     if (SKIP_PAYMENT || isAdminEmail(userEmail)) {
       proceedAfterPayment();
     } else {
@@ -704,25 +751,48 @@ export default function Home() {
   // iOS Safari: a.click() loses user gesture after any await — must window.open before fetch.
   // Mac Safari: a.download on blob URLs is unreliable for PDF/DOCX — use window.open too.
   // Android Chrome: a.click() works fine in async context.
+  // In-app browsers (LinkedIn, Portkey, etc.): downloads are sandboxed — need fallback
   const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isSafariDesktop = () => {
     const ua = navigator.userAgent;
     return /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Android/i.test(ua) && !/iPhone|iPad|iPod/i.test(ua);
   };
+  const isInAppBrowser = () => {
+    const ua = navigator.userAgent.toLowerCase();
+    return /fban|fbav|linkedin|instagram|twitter|snapchat|tiktok|alipay|wechat|qq|weibo|qzone|kakaotalk|line|viber|telegram|messenger/.test(ua);
+  };
+  const getShareableUrl = () => {
+    const base = window.location.origin + window.location.pathname;
+    return supabaseRowId ? `${base}?s=${supabaseRowId}` : window.location.href;
+  };
+
+  const copyShareableUrl = () => {
+    navigator.clipboard.writeText(getShareableUrl()).catch(() => {});
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2500);
+  };
+
   const needsWindowOpen = () => isIos() || isSafariDesktop();
 
   const triggerAnchorDownload = (url: string, filename: string) => {
+    console.log(`[Download] Attempting anchor download for ${filename}`);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.style.display = 'none';
     document.body.appendChild(a);
-    a.click();
+    const clickEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    });
+    a.dispatchEvent(clickEvent);
     // Keep element and blob URL alive for 60s so slow browsers can complete the download
     setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 60000);
   };
 
   const fetchDownload = async (endpoint: string, label: string): Promise<Blob> => {
+    console.log(`[Download] Fetching from ${endpoint}...`);
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -734,26 +804,54 @@ export default function Home() {
       console.error(`[${label}] server error:`, serverMsg);
       throw new Error(serverMsg);
     }
-    return response.blob();
+    const blob = await response.blob();
+    console.log(`[Download] Blob received, size: ${blob.size} bytes, type: ${blob.type}`);
+    if (blob.size === 0) {
+      throw new Error('Server returned empty file. Please try again.');
+    }
+    return blob;
   };
 
   const handleDownloadWord = async () => {
     if (!cvJson || isDownloadingWord) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
+    const inApp = isInAppBrowser();
     setIsDownloadingWord(true);
     try {
+      console.log(`[Download Word] Starting... In-app browser: ${inApp}`);
+      
+      // Fail fast for in-app browsers
+      if (inApp) {
+        console.warn('[Download Word] In-app browser detected. Downloads are blocked in app browsers.');
+        throw new Error('IN_APP_BLOCKED');
+      }
+      
       const blob = await fetchDownload('/api/download', 'Word');
       const url = window.URL.createObjectURL(blob);
-      if (win) { win.location.href = url; }
-      else { triggerAnchorDownload(url, `${safeName}-tailored.docx`); }
+      console.log(`[Download Word] Blob URL created: ${url.substring(0, 50)}...`);
+      
+      const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
+      
+      if (win) { 
+        win.location.href = url; 
+      } else { 
+        triggerAnchorDownload(url, `${safeName}-tailored.docx`); 
+      }
+      
       setWordDownloadDone(true);
       setTimeout(() => setWordDownloadDone(false), 3000);
       triggerFeedbackCard();
+      console.log('[Download Word] Success');
     } catch (error) {
-      win?.close();
-      console.error('Word download error:', error);
-      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Download Word] Error caught:', errMsg, error);
+      
+      // Show different messages based on error type
+      if (errMsg === 'IN_APP_BLOCKED') {
+        setShowInAppModal(true);
+      } else {
+        alert(`Download failed: ${errMsg}\n\nTry the PDF option or refresh and try again.`);
+      }
     } finally {
       setIsDownloadingWord(false);
     }
@@ -762,20 +860,43 @@ export default function Home() {
   const handleDownloadPdf = async () => {
     if (!cvJson || isDownloadingPdf) return;
     const safeName = cvJson.name?.replace(/\s+/g, '-') || 'cv';
-    const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
+    const inApp = isInAppBrowser();
     setIsDownloadingPdf(true);
     try {
+      console.log(`[Download PDF] Starting... In-app browser: ${inApp}`);
+      
+      // Fail fast for in-app browsers
+      if (inApp) {
+        console.warn('[Download PDF] In-app browser detected. Downloads are blocked in app browsers.');
+        throw new Error('IN_APP_BLOCKED');
+      }
+      
       const blob = await fetchDownload('/api/download-pdf', 'PDF');
       const url = window.URL.createObjectURL(blob);
-      if (win) { win.location.href = url; }
-      else { triggerAnchorDownload(url, `${safeName}-tailored.pdf`); }
+      console.log(`[Download PDF] Blob URL created: ${url.substring(0, 50)}...`);
+      
+      const win = needsWindowOpen() ? window.open('about:blank', '_blank') : null;
+      
+      if (win) { 
+        win.location.href = url; 
+      } else { 
+        triggerAnchorDownload(url, `${safeName}-tailored.pdf`); 
+      }
+      
       setPdfDownloadDone(true);
       setTimeout(() => setPdfDownloadDone(false), 3000);
       triggerFeedbackCard();
+      console.log('[Download PDF] Success');
     } catch (error) {
-      win?.close();
-      console.error('PDF download error:', error);
-      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Download PDF] Error caught:', errMsg, error);
+      
+      // Show different messages based on error type
+      if (errMsg === 'IN_APP_BLOCKED') {
+        setShowInAppModal(true);
+      } else {
+        alert(`Download failed: ${errMsg}\n\nTry the Word option or refresh and try again.`);
+      }
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -816,6 +937,43 @@ export default function Home() {
     submitFeedback(feedbackRating!, feedbackText);
   };
 
+  const handleSendEmail = async () => {
+    if (!cvJson || emailSendStatus === 'sending' || emailSendStatus === 'sent') return;
+    if (!userEmail) return;
+    setEmailSendStatus('sending');
+    try {
+      const [wordRes, pdfRes] = await Promise.all([
+        fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cvData: cvJson }) }),
+        fetch('/api/download-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cvData: cvJson }) }),
+      ]);
+      if (!wordRes.ok || !pdfRes.ok) throw new Error('Failed to generate files');
+
+      const [wordBlob, pdfBlob] = await Promise.all([wordRes.blob(), pdfRes.blob()]);
+
+      const toBase64 = (blob: Blob): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+      const [wordDocBuffer, pdfBuffer] = await Promise.all([toBase64(wordBlob), toBase64(pdfBlob)]);
+
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail, name: cvJson.name || 'there', wordDocBuffer, pdfBuffer }),
+      });
+
+      if (!res.ok) throw new Error('Email send failed');
+      setEmailSendStatus('sent');
+    } catch (err) {
+      console.error('[send-email]', err);
+      setEmailSendStatus('failed');
+    }
+  };
+
   const handleRefine = async () => {
     if (refinementCount >= 3 || !refinementFeedback.trim()) return;
     setIsRefining(true);
@@ -830,11 +988,17 @@ export default function Home() {
             fd.append('file', file);
             const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd });
             const d = await res.json();
+            if (!d.success) console.warn('[refine] parse failed for', file.name, d.error);
             return d.success ? d.text : '';
           })
         );
-        cvText = parsed.filter(Boolean).join('\n\n---\n\n');
-        setPendingCvContent(cvText);
+        const reparsed = parsed.filter(Boolean).join('\n\n---\n\n');
+        // Only replace cvText when parsing actually produced content;
+        // otherwise keep the original pendingCvContent so the API call doesn't fail.
+        if (reparsed.trim()) {
+          cvText = reparsed;
+          setPendingCvContent(cvText);
+        }
       }
 
       const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
@@ -1601,6 +1765,28 @@ export default function Home() {
           </div>
         )}
 
+        {/* Download tip popup — shown every time the success screen loads */}
+        {showInAppModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowInAppModal(false)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between mb-4">
+                <p className="text-slate-800 dark:text-slate-100 text-base leading-relaxed pr-4">
+                  💡 Download not working? Your app may be blocking it. Try opening this link in your device&apos;s default browser.
+                </p>
+                <button onClick={() => setShowInAppModal(false)} className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-0.5">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <button
+                onClick={() => { copyShareableUrl(); }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+              >
+                {linkCopied ? '✓ Copied!' : 'Copy Link'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tailor Another CV confirmation modal */}
         {showTailorAnotherModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowTailorAnotherModal(false)}>
@@ -1631,6 +1817,22 @@ export default function Home() {
         <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
           <div className="max-w-2xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Your CV is ready</h1>
+
+            {/* Proactive in-app browser banner */}
+            {isInAppBrowser() && (
+              <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-4 py-3">
+                <p className="flex-1 text-sm text-amber-800 dark:text-amber-200">
+                  💡 Download not working? Your app may be blocking it. Try opening this link in your device&apos;s default browser.
+                </p>
+                <button
+                  onClick={copyShareableUrl}
+                  className="shrink-0 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2 transition-colors"
+                >
+                  {linkCopied ? '✓ Copied!' : 'Copy Link'}
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleDownloadWord}
@@ -1658,6 +1860,35 @@ export default function Home() {
                   <><CheckCircle className="w-5 h-5" /> Downloaded!</>
                 ) : (
                   <><Download className="w-5 h-5" /> Download PDF</>
+                )}
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {!userEmail && emailSendStatus !== 'sent' && (
+                <input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="Enter your email to receive CV"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              )}
+              <button
+                onClick={handleSendEmail}
+                disabled={emailSendStatus === 'sending' || emailSendStatus === 'sent'}
+                className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 dark:text-slate-300 font-semibold py-2.5 px-5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                {emailSendStatus === 'sending' ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Sending…</>
+                ) : emailSendStatus === 'sent' ? (
+                  <><CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" /><span className="text-green-600 dark:text-green-400">Sent!</span></>
+                ) : emailSendStatus === 'failed' ? (
+                  'Failed to send — try again'
+                ) : userEmail ? (
+                  `📧 Send CV to ${userEmail}`
+                ) : (
+                  '📧 Send CV to email'
                 )}
               </button>
             </div>
