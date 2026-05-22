@@ -114,7 +114,7 @@ export default function Home() {
   const [supabaseRowId, setSupabaseRowId] = useState<string | null>(null);
   const [analysisReady, setAnalysisReady] = useState(false);
   const [detectedName, setDetectedName] = useState('');
-  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [showJdNudge, setShowJdNudge] = useState(false);
   const [showInAppModal, setShowInAppModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -318,6 +318,7 @@ export default function Home() {
     setAnalysisQuestions([]);
     setAnalysisAnswers([]);
     setCurrentAnalysisAnswer('');
+    setSelectedOptions([]);
     setUserEmail('');
     setSupabaseRowId(null);
     setAnalysisReady(false);
@@ -415,6 +416,7 @@ export default function Home() {
     setPendingCvContent(cvText);
     setAnalysisAnswers([]);
     setCurrentAnalysisAnswer('');
+    setSelectedOptions([]);
     setErrorMsg('');
     setAnalysisReady(false);
 
@@ -543,7 +545,7 @@ export default function Home() {
     const newAnswers = [...analysisAnswers, answer];
     setAnalysisAnswers(newAnswers);
     setCurrentAnalysisAnswer('');
-    setShowOtherInput(false);
+    setSelectedOptions([]);
     if (newAnswers.length >= analysisQuestions.length) {
       proceedToGenerate();
     }
@@ -1324,7 +1326,7 @@ export default function Home() {
                   onClick={() => {
                     setAnalysisAnswers(analysisAnswers.slice(0, idx));
                     setCurrentAnalysisAnswer('');
-                    setShowOtherInput(false);
+                    setSelectedOptions([]);
                   }}
                   className="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-1 opacity-60 cursor-pointer hover:opacity-100 hover:ring-2 hover:ring-blue-400 transition-all group"
                 >
@@ -1343,47 +1345,60 @@ export default function Home() {
 
                   {currentQ.options ? (
                     <div className="flex flex-col gap-2">
-                      {currentQ.options.map((opt: string) => (
-                        <button
-                          key={opt}
-                          onClick={() => handleAnalysisAnswer(opt)}
-                          className="text-left px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-800 dark:text-slate-200 transition-colors"
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                      {!showOtherInput ? (
-                        <button
-                          onClick={() => setShowOtherInput(true)}
-                          className="text-left px-4 py-2.5 rounded-lg border border-dashed border-slate-400 dark:border-slate-500 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors text-sm"
-                        >
-                          Other…
-                        </button>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          <input
-                            autoFocus
-                            type="text"
-                            value={currentAnalysisAnswer}
-                            onChange={(e) => setCurrentAnalysisAnswer(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleAnalysisAnswer(currentAnalysisAnswer); }}
-                            placeholder="Type your answer…"
-                            className="w-full px-4 py-2 border border-blue-400 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
+                      {currentQ.options.map((opt: string) => {
+                        const isSelected = selectedOptions.includes(opt);
+                        return (
                           <button
-                            onClick={() => handleAnalysisAnswer(currentAnalysisAnswer)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                            key={opt}
+                            onClick={() => setSelectedOptions(isSelected ? selectedOptions.filter(o => o !== opt) : [...selectedOptions, opt])}
+                            className={`text-left px-4 py-2.5 rounded-lg border transition-colors ${isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium' : 'border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'}`}
                           >
-                            Submit
+                            {opt}
                           </button>
-                        </div>
-                      )}
+                        );
+                      })}
+                      {/* Other toggle */}
                       <button
-                        onClick={() => handleAnalysisAnswer('')}
-                        className="text-left px-4 py-2.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-slate-400 transition-colors text-sm"
+                        onClick={() => {
+                          if (selectedOptions.includes('Other')) {
+                            setSelectedOptions(selectedOptions.filter(o => o !== 'Other'));
+                            setCurrentAnalysisAnswer('');
+                          } else {
+                            setSelectedOptions([...selectedOptions, 'Other']);
+                          }
+                        }}
+                        className={`text-left px-4 py-2.5 rounded-lg border transition-colors text-sm ${selectedOptions.includes('Other') ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 font-medium' : 'border-dashed border-slate-400 dark:border-slate-500 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600'}`}
                       >
-                        Skip
+                        Other…
                       </button>
+                      {selectedOptions.includes('Other') && (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={currentAnalysisAnswer}
+                          onChange={(e) => setCurrentAnalysisAnswer(e.target.value)}
+                          placeholder="Type your answer…"
+                          className="w-full px-4 py-2 border border-blue-400 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => {
+                            const parts = selectedOptions.map(o => o === 'Other' ? currentAnalysisAnswer : o).filter(Boolean);
+                            handleAnalysisAnswer(parts.join(', '));
+                          }}
+                          disabled={selectedOptions.length === 0}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          Submit
+                        </button>
+                        <button
+                          onClick={() => handleAnalysisAnswer('')}
+                          className="px-4 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-slate-400 transition-colors text-sm"
+                        >
+                          Skip
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
