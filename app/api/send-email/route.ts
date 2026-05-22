@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const safeName = name.replace(/\s+/g, '-');
 
     const { error } = await resend.emails.send({
-      from: 'Portkey <onboarding@resend.dev>',
+      from: 'Portkey <hello@portkey-cv.in>',
       to: email,
       subject: 'Your tailored CV from Portkey',
       html: `Hi ${name},<br><br>Thanks for using Portkey.<br><br>Here's your tailored CV. Need to make changes? Visit <a href='https://cv-tailor-rho-beryl.vercel.app'>Portkey</a> to refine it.<br><br>If you liked your CV, please spread the word.<br><br>Good luck with your job search!<br><br>— Team Portkey`,
