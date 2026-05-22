@@ -510,11 +510,14 @@ export async function POST(request: NextRequest) {
     const buffer = await Packer.toBuffer(doc);
     const safeName = cvName.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "-") || 'cv';
 
-    return new NextResponse(new Uint8Array(buffer), {
+    console.log(`[download-word] Generated file size: ${buffer.length} bytes`);
+
+    return new NextResponse(buffer, {
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="${safeName}-tailored-cv.docx"`,
+        "Content-Length": buffer.length.toString(),
+        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {

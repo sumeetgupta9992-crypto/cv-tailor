@@ -662,10 +662,14 @@ export async function POST(request: NextRequest) {
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
     const safeName = cvData.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-') || 'cv';
 
+    console.log(`[download-pdf] Generated file size: ${pdfBuffer.length} bytes`);
+
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${safeName}-tailored-cv.pdf"`,
+        'Content-Length': pdfBuffer.length.toString(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error) {
