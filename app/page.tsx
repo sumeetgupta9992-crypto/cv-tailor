@@ -4,9 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { FileText, Download, Loader, CheckCircle, RefreshCw, X, Plus, ChevronRight, AlertCircle, Award } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 
-const PRICE_INR = 19;
-const SKIP_PAYMENT = typeof process !== 'undefined' && process.env.NODE_ENV === 'development' ? true : false;
-const ADMIN_EMAILS = ['p14sumeetg@iima.ac.in', 'sumeetgupta9992@gmail.com'];
 
 const MAGIC_MESSAGES = [
   'Summoning your achievements... ✨',
@@ -50,12 +47,11 @@ type CVData = {
   education: Array<{ degree: string; institution: string; year: string }>;
 };
 
-type AppMode = 'mode-selection' | 'existing-cv' | 'interview' | 'analyzing' | 'analysis' | 'payment' | 'generating' | 'success' | 'error';
+type AppMode = 'mode-selection' | 'existing-cv' | 'interview' | 'analyzing' | 'analysis' | 'generating' | 'success' | 'error';
 type AnalysisQuestion = { question: string; options: string[] | null };
 type JDRequirement = { requirement: string; match_status: 'strong_match' | 'partial_match' | 'not_found' };
 
 type SessionData = {
-  paid: boolean;
   cvContent: string;
   jobDescription: string;
   additionalInfo: string;
@@ -134,8 +130,6 @@ export default function Home() {
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
   const refinementTextareaRef = useRef<HTMLTextAreaElement>(null);
   const feedbackAutoSubmitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref so Razorpay's async handler always reads the latest value, never a stale closure snapshot
-  const pendingCvContentRef = useRef('');
 
   const HINT_CATEGORIES = [
     {
@@ -200,11 +194,6 @@ export default function Home() {
     setTimeout(() => setCopiedHint(null), 1500);
   };
 
-  // Keep ref in sync so Razorpay's async handler always sees the latest CV content
-  useEffect(() => {
-    pendingCvContentRef.current = pendingCvContent;
-  }, [pendingCvContent]);
-
   // Ensure the "Tailor Another CV" modal is never open when entering the success screen
   useEffect(() => {
     if (appMode === 'success') setShowTailorAnotherModal(false);
@@ -212,7 +201,7 @@ export default function Home() {
 
   // Push a history entry when entering screens that shouldn't let browser Back exit the app
   useEffect(() => {
-    if (appMode === 'analyzing' || appMode === 'payment') {
+    if (appMode === 'analyzing') {
       history.pushState({ portkey: appMode }, '');
     }
   }, [appMode]);
@@ -230,12 +219,10 @@ export default function Home() {
     if (appMode === 'success') setShowInAppModal(true);
   }, [appMode]);
 
-  // Intercept browser Back from analyzing/analysis/payment screens
+  // Intercept browser Back from analyzing/analysis screens
   useEffect(() => {
     const handlePopState = () => {
-      if (appMode === 'payment') {
-        setAppMode('analysis');
-      } else if (appMode === 'analyzing' || appMode === 'analysis') {
+      if (appMode === 'analyzing' || appMode === 'analysis') {
         setAppMode(pendingMode === 'scratch' ? 'interview' : 'existing-cv');
       }
     };
@@ -243,14 +230,8 @@ export default function Home() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [appMode, pendingMode]);
 
-  // Load Razorpay script and restore session from localStorage or ?s= URL param
+  // Restore session from localStorage or ?s= URL param
   useEffect(() => {
-    // Load Razorpay script
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    document.body.appendChild(script);
-
     if (typeof window === 'undefined') return;
 
     // ?s=<supabaseRowId> — shared link from another browser (e.g. copy-link from IAB)
@@ -281,7 +262,7 @@ export default function Home() {
     if (savedSession) {
       try {
         const session: SessionData = JSON.parse(savedSession);
-        if (Date.now() < session.expiryTime && session.paid) {
+        if (Date.now() < session.expiryTime && session.cvJson) {
       
           setAdditionalInfo(session.additionalInfo);
           setJobDescription(session.jobDescription);
@@ -304,7 +285,6 @@ export default function Home() {
 
   const saveSessionToLocalStorage = (overrides?: Partial<SessionData>) => {
     const session: SessionData = {
-      paid: true,
       cvContent: pendingCvContent,
       pendingCvContent,
       jobDescription,
@@ -352,172 +332,15 @@ export default function Home() {
     setAppMode('mode-selection');
   };
 
-  const handlePayment = async () => {
-    if (SKIP_PAYMENT) {
-  
-      await proceedAfterPayment();
-      return;
-    }
 
-    try {
-      // Create order
-      const orderRes = await fetch('/api/create-order', { method: 'POST' });
-      const orderData = await orderRes.json();
-
-      if (!orderData.success) {
-        setErrorMsg(orderData.error || 'Failed to create payment order');
-        setAppMode('error');
-        return;
-      }
-
-      const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
-      console.log('[Razorpay] Opening checkout — key:', razorpayKey, '| order_id:', orderData.orderId);
-
-      if (!razorpayKey) {
-        setErrorMsg('Razorpay public key is missing. Check NEXT_PUBLIC_RAZORPAY_KEY_ID env var.');
-        setAppMode('error');
-        return;
-      }
-
-      const razorpayWindow = (window as any).Razorpay;
-      if (!razorpayWindow) {
-        setErrorMsg('Razorpay checkout script failed to load. Please disable any ad blockers and try again.');
-        setAppMode('error');
-        return;
-      }
-
-      // Track whether the success handler fired, so ondismiss can distinguish
-      // a manual close from a UPI "pending" close (where neither handler nor
-      // payment.failed fires, leaving the user silently stuck on payment screen).
-      let paymentHandlerFired = false;
-
-      const options = {
-        key: razorpayKey,
-        order_id: orderData.orderId,
-        amount: 1900, // paise — must match order; here for display only
-        currency: 'INR',
-        name: 'Portkey',
-        description: 'CV generation + 3 refinements',
-        handler: async (response: any) => {
-          paymentHandlerFired = true;
-          try {
-            console.log('[Razorpay] ✅ Payment handler fired', {
-              payment_id: response.razorpay_payment_id,
-              order_id: response.razorpay_order_id,
-              signature: response.razorpay_signature ? response.razorpay_signature.slice(0, 16) + '…' : 'MISSING',
-            });
-
-            if (!response.razorpay_payment_id || !response.razorpay_order_id || !response.razorpay_signature) {
-              console.error('[Razorpay] Incomplete response — missing fields', response);
-              setErrorMsg('Payment response incomplete. Please contact support with payment ID: ' + (response.razorpay_payment_id || 'unknown'));
-              setAppMode('error');
-              return;
-            }
-
-            console.log('[Razorpay] Calling /api/verify-payment…');
-            const verifyRes = await fetch('/api/verify-payment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-
-            const verifyData = await verifyRes.json();
-            console.log('[Razorpay] Verify response:', { success: verifyData.success, error: verifyData.error });
-
-            if (verifyData.success) {
-              console.log('[Razorpay] Verification passed — proceeding to generate');
-          
-              await proceedAfterPayment();
-            } else {
-              console.error('[Razorpay] Verification failed:', verifyData.error);
-              setErrorMsg(verifyData.error || 'Payment verification failed. Please contact support.');
-              setAppMode('error');
-            }
-          } catch (error) {
-            console.error('[Razorpay] Error in payment handler:', error);
-            setErrorMsg(error instanceof Error ? error.message : 'Payment handler error');
-            setAppMode('error');
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            console.log('[Razorpay] Modal dismissed — handler had fired:', paymentHandlerFired);
-            if (!paymentHandlerFired) {
-              // User closed manually OR UPI payment is "pending" (bank confirming).
-              // In the pending case neither handler nor payment.failed fires.
-              setErrorMsg('Payment was not completed. If you made a UPI payment and were charged, please contact support with your UPI transaction ID.');
-              setAppMode('error');
-            }
-            // If handler already fired we're mid-flow (generating) — don't interfere.
-          },
-        },
-        prefill: {
-          email: userEmail.trim() || '',
-        },
-        theme: { color: '#2B579A' },
-        method: {
-          upi: true,
-          card: false,
-          netbanking: false,
-          wallet: false,
-          emi: false,
-        },
-        config: {
-          display: {
-            blocks: {
-              upi: {
-                name: 'Pay via UPI',
-                instruments: [{ method: 'upi' }],
-              },
-            },
-            sequence: ['block.upi'],
-            preferences: { show_default_blocks: false },
-          },
-        },
-      };
-
-      const rzp = new razorpayWindow(options);
-      rzp.on('payment.failed', (response: any) => {
-        console.error('[Razorpay] Payment failed:', response.error);
-        setErrorMsg(response.error?.description || response.error?.reason || 'Payment failed');
-        setAppMode('error');
-      });
-      rzp.open();
-    } catch (error) {
-      console.error('[Razorpay] handlePayment error:', error);
-      setErrorMsg(error instanceof Error ? error.message : 'Payment error');
-      setAppMode('error');
-    }
-  };
-
-  // Called immediately after payment. Files are already parsed and stored in pendingCvContent
-  // from the analyze step. Analysis answers are already collected. Just generate.
-  const proceedAfterPayment = async () => {
-    // Read from ref first — it always holds the latest value even if this closure is stale
-    // (which can happen when Razorpay's async handler fires after a mobile UPI redirect)
-    const cvText = pendingCvContentRef.current || pendingCvContent;
-
-    console.log('[proceedAfterPayment] entered', {
-      cvLength: cvText.length,
-      refLength: pendingCvContentRef.current.length,
-      stateLength: pendingCvContent.length,
-      questionsCount: analysisQuestions.length,
-      answersCount: analysisAnswers.length,
-    });
-
-    if (!cvText.trim()) {
-      console.error('[proceedAfterPayment] CV content is empty — cannot generate');
+  const proceedToGenerate = async () => {
+    if (!pendingCvContent.trim()) {
       setErrorMsg('CV content was lost. Please go back and re-upload your CV.');
       setAppMode('error');
       return;
     }
-
     const qa = analysisQuestions.map((q, i) => ({ question: q.question, answer: analysisAnswers[i] ?? '' }));
-    await generateCV(cvText, qa);
+    await generateCV(pendingCvContent, qa);
   };
 
   const generateCV = async (cvText: string, answers: Array<{ question: string; answer: string }>) => {
@@ -551,7 +374,6 @@ export default function Home() {
               job_description: jobDescription.trim().slice(0, 500) || null,
               cv_content: data.cvData,
               refinement_count: 0,
-              payment_status: 'pending',
               flow_type: pendingMode === 'scratch' ? 'from_scratch' : 'existing_cv',
               source_cv_text: cvText.slice(0, 1000) || null,
             })
@@ -708,21 +530,6 @@ export default function Home() {
     await _proceedScratchCV();
   };
 
-  const isAdminEmail = (email: string) => ADMIN_EMAILS.includes(email.trim().toLowerCase());
-
-  const goToPaymentOrGenerate = () => {
-    if (!pendingCvContentRef.current.trim()) {
-      setErrorMsg('CV content is missing. Please go back and re-upload your CV.');
-      setAppMode('error');
-      return;
-    }
-    if (SKIP_PAYMENT || isAdminEmail(userEmail)) {
-      proceedAfterPayment();
-    } else {
-      setAppMode('payment');
-    }
-  };
-
   const handleRefineButtonClick = () => {
     if (refinementFeedback.trim()) {
       handleRefine();
@@ -738,7 +545,7 @@ export default function Home() {
     setCurrentAnalysisAnswer('');
     setShowOtherInput(false);
     if (newAnswers.length >= analysisQuestions.length) {
-      goToPaymentOrGenerate();
+      proceedToGenerate();
     }
   };
 
@@ -1103,18 +910,6 @@ export default function Home() {
             ✨ No CV yet? Start from scratch — we&apos;ll guide you.
           </p>
 
-          {/* 7. Price pill */}
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: '#FDF3E0', color: '#740001' }}>
-              🚀 Launch offer —
-              <span className="line-through font-normal" style={{ color: '#888' }}>₹199</span>
-              ₹19 only
-            </span>
-            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-bold tracking-wide text-white" style={{ backgroundColor: '#740001' }}>
-              90% OFF
-            </span>
-          </div>
-
           {/* 3. Alumnus badge */}
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border" style={{ backgroundColor: '#FDF3E0', color: '#740001', borderColor: '#D4A843' }}>
             <Award className="w-3 h-3" />
@@ -1159,53 +954,6 @@ export default function Home() {
           </div>
 
         </main>
-      </div>
-    );
-  }
-
-  if (appMode === 'payment') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-8 max-w-md w-full">
-          {SKIP_PAYMENT && (
-            <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-800 dark:text-amber-200">DEV MODE — Payment skipped</p>
-            </div>
-          )}
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pay through UPI → Return to this tab → Download your CV</h2>
-          <p className="text-slate-600 dark:text-slate-300 mb-6">3 refinements included</p>
-          
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-700 dark:text-slate-300 font-medium">Total Price</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg line-through text-slate-400 dark:text-slate-500">₹199</span>
-                <span className="text-3xl font-bold" style={{ color: '#D4A843' }}>₹{PRICE_INR}</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-sm text-slate-600 dark:text-slate-400">UPI payment only · Secure checkout by Razorpay</p>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{ backgroundColor: '#FDF3E0', color: '#740001', borderColor: '#D4A843' }}>
-                90% OFF — Launch Offer
-              </span>
-            </div>
-          </div>
-
-          <button
-            onClick={handlePayment}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            Pay ₹{PRICE_INR} & Generate CV
-          </button>
-
-          <button
-            onClick={() => setAppMode('analysis')}
-            className="w-full mt-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold py-2 px-6 rounded-lg transition-colors"
-          >
-            ← Back
-          </button>
-        </div>
       </div>
     );
   }
@@ -1668,23 +1416,15 @@ export default function Home() {
             </div>
           )}
 
-          {/* Pay button — shown when no questions, or all answered */}
+          {/* Generate button — shown when no questions, or all answered */}
           {(analysisQuestions.length === 0 || allAnswered) && (
             <div className="cv-fade-in">
-              {!isAdminEmail(userEmail) && (
-                <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-2">
-                  Pay on PhonePe &nbsp;→&nbsp; Return to this tab &nbsp;→&nbsp; Download your CV
-                </p>
-              )}
               <button
-                onClick={goToPaymentOrGenerate}
+                onClick={proceedToGenerate}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                {isAdminEmail(userEmail) ? 'Generate CV' : `Pay ₹${PRICE_INR} & Generate CV`}
+                Generate CV
               </button>
-              {isAdminEmail(userEmail) && (
-                <p className="text-center text-xs text-slate-400 mt-1">Admin access</p>
-              )}
             </div>
           )}
         </main>
@@ -1792,9 +1532,7 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowTailorAnotherModal(false)}>
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
               <p className="text-slate-900 dark:text-white text-base mb-6">
-                {refinesLeft > 0
-                  ? `You still have ${refinesLeft} refinement${refinesLeft === 1 ? '' : 's'} left — you can tweak your current CV at no extra cost. Starting a new CV will require a fresh payment of ₹${PRICE_INR}. Continue anyway?`
-                  : `Starting a new CV will require a fresh payment of ₹${PRICE_INR}. Continue?`}
+                This will start fresh. Your current CV and refinements will be cleared. Continue?
               </p>
               <div className="flex gap-3">
                 <button
@@ -1807,7 +1545,7 @@ export default function Home() {
                   onClick={clearSession}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
                 >
-                  Start new CV
+                  Start fresh
                 </button>
               </div>
             </div>
