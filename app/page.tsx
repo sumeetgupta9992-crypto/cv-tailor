@@ -16,15 +16,6 @@ const MAGIC_MESSAGES = [
   'Casting the final spell... ⚡',
 ];
 
-const ANALYSIS_MESSAGES = [
-  'Scanning your parchment...',
-  'Decoding your achievements...',
-  'Mapping your experience...',
-  'Revealing hidden strengths...',
-];
-
-const SOLEMNLY_WORDS = ['I', 'solemnly', 'swear', 'I', 'am', 'up', 'to', 'no', 'good'];
-
 function extractEmailFromText(text: string): string | null {
   const m = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
   return m ? m[0] : null;
@@ -133,9 +124,6 @@ export default function Home() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [emailSendStatus, setEmailSendStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
-  const [solemlyWordCount, setSolemlyWordCount] = useState(0);
-  const [analysisMsgIdx, setAnalysisMsgIdx] = useState(0);
-  const [mischiefPhase, setMischiefPhase] = useState<'none' | 'in' | 'hold' | 'out'>('none');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interviewEndRef = useRef<HTMLDivElement>(null);
@@ -226,46 +214,6 @@ export default function Home() {
     return () => clearInterval(id);
   }, [appMode]);
 
-  // Word-by-word "I solemnly swear" reveal while analyzing
-  useEffect(() => {
-    if (appMode !== 'analyzing') { setSolemlyWordCount(0); return; }
-    setSolemlyWordCount(0);
-    let count = 0;
-    const id = setInterval(() => {
-      count++;
-      setSolemlyWordCount(count);
-      if (count >= 9) clearInterval(id);
-    }, 400);
-    return () => clearInterval(id);
-  }, [appMode]);
-
-  // Cycle analysis messages every 3s while analyzing
-  useEffect(() => {
-    if (appMode !== 'analyzing') { setAnalysisMsgIdx(0); return; }
-    setAnalysisMsgIdx(0);
-    const id = setInterval(() => setAnalysisMsgIdx(i => (i + 1) % ANALYSIS_MESSAGES.length), 3000);
-    return () => clearInterval(id);
-  }, [appMode]);
-
-  // Mischief Managed transition: in → hold → out → success
-  useEffect(() => {
-    if (mischiefPhase === 'none') return;
-    if (mischiefPhase === 'in') {
-      const t = setTimeout(() => setMischiefPhase('hold'), 2500);
-      return () => clearTimeout(t);
-    }
-    if (mischiefPhase === 'hold') {
-      const t = setTimeout(() => setMischiefPhase('out'), 2000);
-      return () => clearTimeout(t);
-    }
-    if (mischiefPhase === 'out') {
-      const t = setTimeout(() => {
-        setMischiefPhase('none');
-        setAppMode('success');
-      }, 1100);
-      return () => clearTimeout(t);
-    }
-  }, [mischiefPhase]);
 
   // Intercept browser Back from analyzing/analysis screens
   useEffect(() => {
@@ -435,7 +383,7 @@ export default function Home() {
 
         setSupabaseRowId(rowId);
         saveSessionToLocalStorage({ cvJson: data.cvData, refinementCount: 0, refinementChanges: [], supabaseRowId: rowId });
-        setMischiefPhase('in');
+        setAppMode('success');
       } else {
         setErrorMsg(data.error || 'Error generating CV');
         setAppMode('error');
@@ -1257,71 +1205,42 @@ export default function Home() {
   }
 
   if (appMode === 'analyzing') {
-    const footstepPositions = [
-      { left: '8%',  top: '22%' }, { left: '18%', top: '38%' },
-      { left: '30%', top: '28%' }, { left: '42%', top: '44%' },
-      { left: '54%', top: '32%' }, { left: '66%', top: '48%' },
-      { left: '77%', top: '36%' }, { left: '88%', top: '52%' },
-    ];
-    const splatPositions = [
-      { left: '5%',  top: '15%', size: 5 },
-      { left: '92%', top: '25%', size: 7 },
-      { left: '88%', top: '70%', size: 4 },
-      { left: '3%',  top: '78%', size: 6 },
-    ];
     return (
-      <div className="parchment-bg min-h-screen relative overflow-hidden flex flex-col items-center justify-center px-4 py-8">
-        {/* Ink splatters */}
-        {splatPositions.map((s, i) => (
-          <div key={i} className="absolute rounded-full" style={{
-            left: s.left, top: s.top, width: s.size, height: s.size,
-            background: '#2C1810',
-            animation: `splatAppear 0.6s ease-out ${0.3 + i * 0.4}s both`,
-          }} />
-        ))}
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="w-full max-w-sm px-4 text-center">
+          {analysisReady ? (
+            <>
+              <CheckCircle className="w-12 h-12 mx-auto mb-4" style={{ color: '#D4A843' }} />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysis complete</h2>
+              <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Ready to show you how you match up</p>
+            </>
+          ) : (
+            <>
+              <div className="relative w-24 h-24 mx-auto mb-4">
+                <div className="wand-sweep flex items-center justify-center w-full h-full">
+                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                    <line x1="14" y1="52" x2="50" y2="12" stroke="#D4A843" strokeWidth="3.5" strokeLinecap="round"/>
+                    <circle cx="50" cy="12" r="4" fill="#EEBA30"/>
+                    <circle cx="50" cy="12" r="9" fill="#EEBA30" opacity="0.2"/>
+                  </svg>
+                </div>
+                <span className="sparkle-particle text-sm" style={{ top: 4, right: 6, animationDelay: '0s' }}>✦</span>
+                <span className="sparkle-particle text-xs" style={{ top: 0, right: 20, animationDelay: '0.65s' }}>✦</span>
+                <span className="sparkle-particle text-sm" style={{ top: 10, right: 2, animationDelay: '1.3s' }}>★</span>
+                <span className="sparkle-particle text-xs" style={{ top: 2, right: 14, animationDelay: '0.3s' }}>✦</span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Analysing your profile…</h2>
+              <p className="text-slate-600 dark:text-slate-300 mt-2 mb-8">Comparing your background against the role</p>
+            </>
+          )}
 
-        {/* Footsteps — appear after words complete (~4s) */}
-        {footstepPositions.map((pos, i) => (
-          <div key={i} className="absolute text-lg select-none pointer-events-none" style={{
-            left: pos.left, top: pos.top,
-            animation: `footstepPop 0.4s ease-out ${4.2 + i * 0.5}s both`,
-            opacity: 0,
-            color: '#2C1810',
-          }}>👣</div>
-        ))}
-
-        {/* Wand bottom-center */}
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 wand-glow">
-          <svg width="48" height="48" viewBox="0 0 64 64" fill="none" className="wand-sweep">
-            <line x1="14" y1="52" x2="50" y2="12" stroke="#5C3A1E" strokeWidth="3" strokeLinecap="round"/>
-            <circle cx="50" cy="12" r="5" fill="#EEBA30"/>
-            <circle cx="50" cy="12" r="10" fill="#EEBA30" opacity="0.25"/>
-          </svg>
-        </div>
-
-        <div className="w-full max-w-sm text-center z-10">
-          {/* "I solemnly swear..." word by word */}
-          <div className="mb-6 min-h-[3rem]" style={{ fontFamily: "Georgia, 'Palatino Linotype', Palatino, serif", fontSize: '1.25rem', color: '#2C1810', fontStyle: 'italic' }}>
-            {SOLEMNLY_WORDS.slice(0, solemlyWordCount).map((word, i) => (
-              <span key={i} className="ink-word" style={{ animationDelay: `${i * 0.4}s`, marginRight: '0.3em' }}>
-                {word}
-              </span>
-            ))}
-          </div>
-
-          {/* Rotating analysis message */}
-          <p key={analysisMsgIdx} className="ink-message text-base mb-6">
-            {ANALYSIS_MESSAGES[analysisMsgIdx]}
-          </p>
-
-          {/* Email card — parchment styled */}
-          <div className="rounded-lg p-5 text-left" style={{ background: 'rgba(255,248,230,0.85)', border: '1px solid #C4A35A' }}>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-5 text-left">
             {detectedName ? (
-              <p className="text-sm font-medium mb-1" style={{ fontFamily: "Georgia, serif", color: '#2C1810' }}>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Hi {detectedName}, just need your email to continue.
               </p>
             ) : (
-              <label className="block text-sm font-medium mb-1" style={{ fontFamily: "Georgia, serif", color: '#2C1810' }}>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Your email
               </label>
             )}
@@ -1330,17 +1249,16 @@ export default function Home() {
               value={userEmail}
               onChange={(e) => setUserEmail(e.target.value)}
               placeholder="your@email.com"
-              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2"
-              style={{ background: '#FFFBF0', border: '1px solid #C4A35A', color: '#2C1810' }}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
-            <p className="mt-1.5 text-xs" style={{ color: '#6B4C2A' }}>
+            <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
               We&apos;ll use this to save your session. No spam, ever.
             </p>
+
             {analysisReady && (
               <button
                 onClick={() => setAppMode('analysis')}
-                className="mt-4 w-full font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
-                style={{ background: '#740001', color: '#FDF3E0' }}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
               >
                 Continue →
               </button>
@@ -1526,65 +1444,34 @@ export default function Home() {
   }
 
   if (appMode === 'generating') {
-    const sparkleOffsets = [0, 1.2, 2.4, 3.6, 4.8, 6.0, 7.2, 8.4];
     return (
-      <div className="parchment-bg min-h-screen relative overflow-hidden flex items-center justify-center">
-        {/* Map lines SVG — draws outward from centre */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-          {[
-            { x1: '50%', y1: '50%', x2: '15%',  y2: '20%' },
-            { x1: '50%', y1: '50%', x2: '85%',  y2: '15%' },
-            { x1: '50%', y1: '50%', x2: '90%',  y2: '55%' },
-            { x1: '50%', y1: '50%', x2: '75%',  y2: '85%' },
-            { x1: '50%', y1: '50%', x2: '25%',  y2: '88%' },
-            { x1: '50%', y1: '50%', x2: '10%',  y2: '65%' },
-          ].map((l, i) => (
-            <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-              stroke="#5C3A1E" strokeWidth="1" strokeOpacity="0.35"
-              className="map-line"
-              style={{ animationDelay: `${i * 0.35}s`, animationDuration: '2.5s' }}
-            />
-          ))}
-        </svg>
-
-        {/* Traversing wand */}
-        <div className="wand-traverse" style={{ top: '38%' }}>
-          <svg width="52" height="52" viewBox="0 0 64 64" fill="none" className="wand-glow">
-            <line x1="14" y1="52" x2="50" y2="12" stroke="#5C3A1E" strokeWidth="3" strokeLinecap="round"/>
-            <circle cx="50" cy="12" r="5" fill="#EEBA30"/>
-            <circle cx="50" cy="12" r="11" fill="#EEBA30" opacity="0.2"/>
-          </svg>
-          {/* Sparkle trail behind wand */}
-          {sparkleOffsets.map((delay, i) => (
-            <div key={i} className="sparkle-trail" style={{
-              left: `-${8 + i * 12}px`,
-              top: `${6 + (i % 3) * 4}px`,
-              animationDelay: `${delay}s`,
-              animationDuration: '1.8s',
-            }} />
-          ))}
+      <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+        <div className="absolute top-4 left-5">
+          <img src="/icon.png" alt="Portkey" className="h-8 w-8 object-contain" draggable={false} />
         </div>
-
-        {/* Message */}
-        <div className="relative z-10 text-center px-6">
+        <div className="text-center px-6">
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="wand-sweep flex items-center justify-center w-full h-full">
+              <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                <line x1="14" y1="52" x2="50" y2="12" stroke="#D4A843" strokeWidth="3.5" strokeLinecap="round"/>
+                <circle cx="50" cy="12" r="4" fill="#EEBA30"/>
+                <circle cx="50" cy="12" r="9" fill="#EEBA30" opacity="0.2"/>
+              </svg>
+            </div>
+            <span className="sparkle-particle text-sm" style={{ top: 4, right: 6, animationDelay: '0s' }}>✦</span>
+            <span className="sparkle-particle text-xs" style={{ top: 0, right: 20, animationDelay: '0.65s' }}>✦</span>
+            <span className="sparkle-particle text-sm" style={{ top: 10, right: 2, animationDelay: '1.3s' }}>★</span>
+            <span className="sparkle-particle text-xs" style={{ top: 2, right: 14, animationDelay: '0.3s' }}>✦</span>
+          </div>
           <p
             key={magicMsgIdx}
-            className="ink-message text-xl font-semibold"
-            style={{ animationDuration: '3s' }}
+            className="magic-message text-xl font-semibold"
+            style={{ color: '#D4A843' }}
           >
             {MAGIC_MESSAGES[magicMsgIdx]}
           </p>
-          <p className="mt-4 text-sm" style={{ fontFamily: "Georgia, serif", color: '#6B4C2A' }}>
-            This may take a moment…
-          </p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-4">This may take a moment…</p>
         </div>
-
-        {/* Mischief Managed overlay */}
-        {mischiefPhase !== 'none' && (
-          <div className={`mischief-overlay ${mischiefPhase === 'out' ? 'phase-out' : 'phase-in'}`}>
-            <p className="mischief-text">Mischief Managed.</p>
-          </div>
-        )}
       </div>
     );
   }
